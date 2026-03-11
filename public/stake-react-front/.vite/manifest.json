@@ -1,0 +1,173 @@
+{
+  "../src/assets/backgrounds/egypt-pyramids.jpg": {
+    "file": "assets/egypt-pyramids-HTgaskXN.jpg",
+    "src": "../src/assets/backgrounds/egypt-pyramids.jpg"
+  },
+  "../src/assets/backgrounds/fantasy-forest.jpg": {
+    "file": "assets/fantasy-forest-C0KuRccP.jpg",
+    "src": "../src/assets/backgrounds/fantasy-forest.jpg"
+  },
+  "../src/assets/backgrounds/neon-cyberpunk.jpg": {
+    "file": "assets/neon-cyberpunk-DQkJzmwW.jpg",
+    "src": "../src/assets/backgrounds/neon-cyberpunk.jpg"
+  },
+  "../src/assets/backgrounds/ocean-underwater.jpg": {
+    "file": "assets/ocean-underwater-CEMkJHD9.jpg",
+    "src": "../src/assets/backgrounds/ocean-underwater.jpg"
+  },
+  "../src/assets/slot-symbols/amethyst-purple.png": {
+    "file": "assets/amethyst-purple-8CEDNgDf.png",
+    "src": "../src/assets/slot-symbols/amethyst-purple.png"
+  },
+  "../src/assets/slot-symbols/ankh-gold.png": {
+    "file": "assets/ankh-gold-P8Uphq6l.png",
+    "src": "../src/assets/slot-symbols/ankh-gold.png"
+  },
+  "../src/assets/slot-symbols/anubis-head.png": {
+    "file": "assets/anubis-head-CSxplCky.png",
+    "src": "../src/assets/slot-symbols/anubis-head.png"
+  },
+  "../src/assets/slot-symbols/bar-classic.png": {
+    "file": "assets/bar-classic-D8zYG8se.png",
+    "src": "../src/assets/slot-symbols/bar-classic.png"
+  },
+  "../src/assets/slot-symbols/bell-gold.png": {
+    "file": "assets/bell-gold--KHiObx9.png",
+    "src": "../src/assets/slot-symbols/bell-gold.png"
+  },
+  "../src/assets/slot-symbols/cherry-classic.png": {
+    "file": "assets/cherry-classic-DXFBG6MX.png",
+    "src": "../src/assets/slot-symbols/cherry-classic.png"
+  },
+  "../src/assets/slot-symbols/crown-royal.png": {
+    "file": "assets/crown-royal-BWuFDbXw.png",
+    "src": "../src/assets/slot-symbols/crown-royal.png"
+  },
+  "../src/assets/slot-symbols/diamond-blue.png": {
+    "file": "assets/diamond-blue-BzVavW4k.png",
+    "src": "../src/assets/slot-symbols/diamond-blue.png"
+  },
+  "../src/assets/slot-symbols/dragon-asian.png": {
+    "file": "assets/dragon-asian-x3SMgFZU.png",
+    "src": "../src/assets/slot-symbols/dragon-asian.png"
+  },
+  "../src/assets/slot-symbols/emerald-green.png": {
+    "file": "assets/emerald-green-DP5V5qWy.png",
+    "src": "../src/assets/slot-symbols/emerald-green.png"
+  },
+  "../src/assets/slot-symbols/eye-of-horus.png": {
+    "file": "assets/eye-of-horus-B_9ycNZE.png",
+    "src": "../src/assets/slot-symbols/eye-of-horus.png"
+  },
+  "../src/assets/slot-symbols/free-spins-banner.png": {
+    "file": "assets/free-spins-banner-DWfv_uTR.png",
+    "src": "../src/assets/slot-symbols/free-spins-banner.png"
+  },
+  "../src/assets/slot-symbols/gold-coins.png": {
+    "file": "assets/gold-coins-DxI09jRi.png",
+    "src": "../src/assets/slot-symbols/gold-coins.png"
+  },
+  "../src/assets/slot-symbols/grapes-purple.png": {
+    "file": "assets/grapes-purple-DTb-7Jd_.png",
+    "src": "../src/assets/slot-symbols/grapes-purple.png"
+  },
+  "../src/assets/slot-symbols/horseshoe-luck.png": {
+    "file": "assets/horseshoe-luck-DB-NKTmV.png",
+    "src": "../src/assets/slot-symbols/horseshoe-luck.png"
+  },
+  "../src/assets/slot-symbols/lemon-yellow.png": {
+    "file": "assets/lemon-yellow-BFD23IhR.png",
+    "src": "../src/assets/slot-symbols/lemon-yellow.png"
+  },
+  "../src/assets/slot-symbols/lucky-seven.png": {
+    "file": "assets/lucky-seven-eUD3Q7bI.png",
+    "src": "../src/assets/slot-symbols/lucky-seven.png"
+  },
+  "../src/assets/slot-symbols/multiplier-x2.png": {
+    "file": "assets/multiplier-x2-DiPyD3H7.png",
+    "src": "../src/assets/slot-symbols/multiplier-x2.png"
+  },
+  "../src/assets/slot-symbols/orange-fruit.png": {
+    "file": "assets/orange-fruit-Bry9zMpv.png",
+    "src": "../src/assets/slot-symbols/orange-fruit.png"
+  },
+  "../src/assets/slot-symbols/pharaoh-mask.png": {
+    "file": "assets/pharaoh-mask-D1W1V94o.png",
+    "src": "../src/assets/slot-symbols/pharaoh-mask.png"
+  },
+  "../src/assets/slot-symbols/phoenix-fire.png": {
+    "file": "assets/phoenix-fire-CDNhbC72.png",
+    "src": "../src/assets/slot-symbols/phoenix-fire.png"
+  },
+  "../src/assets/slot-symbols/plum-purple.png": {
+    "file": "assets/plum-purple-DzrSCngs.png",
+    "src": "../src/assets/slot-symbols/plum-purple.png"
+  },
+  "../src/assets/slot-symbols/ruby-red.png": {
+    "file": "assets/ruby-red-Q216zrA7.png",
+    "src": "../src/assets/slot-symbols/ruby-red.png"
+  },
+  "../src/assets/slot-symbols/scatter-crystal.png": {
+    "file": "assets/scatter-crystal-DP0mPq0c.png",
+    "src": "../src/assets/slot-symbols/scatter-crystal.png"
+  },
+  "../src/assets/slot-symbols/tiger-gold.png": {
+    "file": "assets/tiger-gold-xHV95TLx.png",
+    "src": "../src/assets/slot-symbols/tiger-gold.png"
+  },
+  "../src/assets/slot-symbols/treasure-chest.png": {
+    "file": "assets/treasure-chest-BGYLBoYN.png",
+    "src": "../src/assets/slot-symbols/treasure-chest.png"
+  },
+  "../src/assets/slot-symbols/watermelon.png": {
+    "file": "assets/watermelon-DZlSvfwy.png",
+    "src": "../src/assets/slot-symbols/watermelon.png"
+  },
+  "../src/assets/slot-symbols/wild-gold.png": {
+    "file": "assets/wild-gold-CtkR2ZpE.png",
+    "src": "../src/assets/slot-symbols/wild-gold.png"
+  },
+  "index.html": {
+    "file": "assets/index-uLp2rPsY.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "css": [
+      "assets/index-N4M5TRhP.css"
+    ],
+    "assets": [
+      "assets/egypt-pyramids-HTgaskXN.jpg",
+      "assets/ocean-underwater-CEMkJHD9.jpg",
+      "assets/fantasy-forest-C0KuRccP.jpg",
+      "assets/neon-cyberpunk-DQkJzmwW.jpg",
+      "assets/wild-gold-CtkR2ZpE.png",
+      "assets/scatter-crystal-DP0mPq0c.png",
+      "assets/diamond-blue-BzVavW4k.png",
+      "assets/crown-royal-BWuFDbXw.png",
+      "assets/lucky-seven-eUD3Q7bI.png",
+      "assets/pharaoh-mask-D1W1V94o.png",
+      "assets/eye-of-horus-B_9ycNZE.png",
+      "assets/ruby-red-Q216zrA7.png",
+      "assets/emerald-green-DP5V5qWy.png",
+      "assets/gold-coins-DxI09jRi.png",
+      "assets/dragon-asian-x3SMgFZU.png",
+      "assets/treasure-chest-BGYLBoYN.png",
+      "assets/cherry-classic-DXFBG6MX.png",
+      "assets/bell-gold--KHiObx9.png",
+      "assets/bar-classic-D8zYG8se.png",
+      "assets/watermelon-DZlSvfwy.png",
+      "assets/amethyst-purple-8CEDNgDf.png",
+      "assets/anubis-head-CSxplCky.png",
+      "assets/ankh-gold-P8Uphq6l.png",
+      "assets/orange-fruit-Bry9zMpv.png",
+      "assets/grapes-purple-DTb-7Jd_.png",
+      "assets/lemon-yellow-BFD23IhR.png",
+      "assets/plum-purple-DzrSCngs.png",
+      "assets/horseshoe-luck-DB-NKTmV.png",
+      "assets/phoenix-fire-CDNhbC72.png",
+      "assets/tiger-gold-xHV95TLx.png",
+      "assets/multiplier-x2-DiPyD3H7.png",
+      "assets/free-spins-banner-DWfv_uTR.png"
+    ]
+  }
+}
