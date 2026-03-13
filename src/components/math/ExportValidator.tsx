@@ -4,8 +4,9 @@ import { useMathConfig } from "@/context/MathConfigContext";
 import { useSlotControls } from "@/context/SlotControlsContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, AlertTriangle, XCircle, Shield } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, Shield, ExternalLink, FileText } from "lucide-react";
 import { validateExport, hasBlockingErrors, type ValidationResult, type ValidationLevel } from "@/lib/stake-engine-validator";
+import { DOCS } from "@/constants/docs-links";
 
 const CATEGORY_LABELS: Record<string, string> = {
   math: "🔢 Validation Math",
@@ -53,6 +54,24 @@ export function ExportValidator({ onValidation }: { onValidation?: (hasErrors: b
 
   return (
     <div className="space-y-4">
+      {/* Doc link */}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <a
+          href={DOCS.hub}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-primary hover:underline"
+        >
+          <ExternalLink className="h-3 w-3" />
+          Documentation Stake Engine
+        </a>
+        <span>·</span>
+        <span className="inline-flex items-center gap-1">
+          <FileText className="h-3 w-3" />
+          Checklist complète : <code className="text-[10px] bg-muted px-1 rounded">docs/STAKE_ENGINE.md</code>
+        </span>
+      </div>
+
       {/* Summary */}
       <Card className={errorCount > 0 ? "border-destructive/50" : warningCount > 0 ? "border-amber-500/50" : "border-emerald-500/50"}>
         <CardContent className="pt-4">

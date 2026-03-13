@@ -154,7 +154,21 @@ export function validateExport(
     });
   }
 
-  // 10. WILD and SCATTER on every reel of BR0
+  // 10. Paylines defined when winMechanic is "lines"
+  if (config.winMechanic === "lines") {
+    const hasPaylines = typeof config.numPaylines === "number" && config.numPaylines > 0;
+    results.push({
+      id: "math-paylines-defined",
+      category: "math",
+      label: "Paylines défini (mode lines)",
+      level: hasPaylines ? "pass" : "error",
+      message: hasPaylines
+        ? `${config.numPaylines} payline(s) configurée(s).`
+        : "⛔ Mode paylines activé mais numPaylines absent ou ≤ 0 — obligatoire.",
+    });
+  }
+
+  // 11. WILD and SCATTER on every reel of BR0
   const br0 = mathConfig.basegameStrips.find((s) => s.id === "BR0");
   if (br0 && hasWild) {
     const wildName = config.symbols.find((s) => s.type === "wild")?.name || "WILD";
