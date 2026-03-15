@@ -25,7 +25,10 @@ const STYLE_CLASSES: Record<CelebrationStyle, string> = {
 
 export function CelebrationEffect({ active, multiplier, style, bet }: Props) {
   if (style === "none" || !active) return null;
-  const tier = getWinTier(multiplier);
+  const mult = Number(multiplier);
+  const safeMult = Number.isFinite(mult) ? mult : 0;
+  const safeBet = Number.isFinite(Number(bet)) ? Number(bet) : 0;
+  const tier = getWinTier(safeMult);
 
   return (
     <AnimatePresence>
@@ -53,10 +56,10 @@ export function CelebrationEffect({ active, multiplier, style, bet }: Props) {
               {tier.label}
             </motion.p>
             <p className="text-2xl font-black mt-2 drop-shadow-md">
-              {multiplier.toFixed(1)}x
+              {safeMult.toFixed(1)}x
             </p>
             <p className="text-sm font-bold mt-1 opacity-80">
-              ${(multiplier * bet).toFixed(2)}
+              ${(safeMult * safeBet).toFixed(2)}
             </p>
           </div>
         </motion.div>

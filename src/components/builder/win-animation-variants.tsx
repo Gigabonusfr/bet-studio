@@ -22,15 +22,17 @@ const COUNT_BY_INTENSITY: Record<WinAnimationIntensity, number> = {
  * Used by Step6Assets WinAnimationPreview and by WinAnimationOverlay in SlotPreview.
  */
 export function WinAnimationContent({ animId, intensity, fullScreen = false, className }: WinAnimationContentProps) {
-  const count = COUNT_BY_INTENSITY[intensity];
+  const safeIntensity = intensity === "low" || intensity === "medium" || intensity === "overthetop" ? intensity : "low";
+  const count = COUNT_BY_INTENSITY[safeIntensity];
   const containerClass = fullScreen
     ? "absolute inset-0 overflow-hidden"
     : "relative h-20 w-full overflow-hidden";
 
+  const safeCount = Number.isFinite(count) && count > 0 ? count : 5;
   const animations: Record<string, React.ReactNode> = {
     coins_fall: (
       <div className={cn("relative w-full overflow-hidden", fullScreen ? "h-full" : "h-20")}>
-        {[...Array(count)].map((_, i) => (
+        {[...Array(safeCount)].map((_, i) => (
           <span
             key={i}
             className="absolute text-xl animate-bounce"
@@ -61,7 +63,7 @@ export function WinAnimationContent({ animId, intensity, fullScreen = false, cla
     ),
     stars_burst: (
       <div className={cn("relative w-full flex items-center justify-center", fullScreen ? "h-full" : "h-20")}>
-        {[...Array(count)].map((_, i) => (
+        {[...Array(safeCount)].map((_, i) => (
           <span
             key={i}
             className="absolute text-2xl animate-ping"
@@ -96,7 +98,7 @@ export function WinAnimationContent({ animId, intensity, fullScreen = false, cla
     ),
     coin_explosion: (
       <div className={cn("relative w-full overflow-hidden", fullScreen ? "h-full" : "h-20")}>
-        {[...Array(count)].map((_, i) => (
+        {[...Array(safeCount)].map((_, i) => (
           <span
             key={i}
             className="absolute text-lg"
@@ -117,7 +119,7 @@ export function WinAnimationContent({ animId, intensity, fullScreen = false, cla
     confetti_color: (
       <div className={cn("relative w-full overflow-hidden", fullScreen ? "h-full" : "h-20")}>
         {["🎊", "🎉", "✨", "💫", "🌟"].flatMap((e, ei) =>
-          [...Array(Math.ceil(count / 5))].map((_, i) => (
+          [...Array(Math.ceil(safeCount / 5))].map((_, i) => (
             <span
               key={`${ei}-${i}`}
               className="absolute text-xl animate-bounce"
@@ -162,7 +164,7 @@ export function WinAnimationContent({ animId, intensity, fullScreen = false, cla
     fireworks: (
       <div className={cn("relative w-full overflow-hidden", fullScreen ? "h-full" : "h-20")}>
         {["🎆", "🎇", "✨"].flatMap((e, ei) =>
-          [...Array(Math.ceil(count / 3))].map((_, i) => (
+          [...Array(Math.ceil(safeCount / 3))].map((_, i) => (
             <span
               key={`${ei}-${i}`}
               className="absolute text-2xl animate-ping"
@@ -182,7 +184,7 @@ export function WinAnimationContent({ animId, intensity, fullScreen = false, cla
     gem_rain: (
       <div className={cn("relative w-full overflow-hidden", fullScreen ? "h-full" : "h-20")}>
         {["💎", "💠", "🔷", "🔶"].flatMap((e, ei) =>
-          [...Array(Math.ceil(count / 4))].map((_, i) => (
+          [...Array(Math.ceil(safeCount / 4))].map((_, i) => (
             <span
               key={`${ei}-${i}`}
               className="absolute text-xl animate-bounce"

@@ -132,23 +132,29 @@ export function AmateurStep7Export() {
 
   const gameId = config.gameId || config.gameName.toLowerCase().replace(/[^a-z0-9]/g, "_") || "my_slot_game";
 
-  // Pour les templates officiels : si les reelstrips contiennent des symboles absents de la config (ex. L5), on régénère des strips valides
+  // Pour les templates officiels : régénérer BR0/FR0 si symboles inconnus, mauvais nombre de rouleaux (ex. 5 au lieu de 6 pour Scatter Pays) ou reelstrips trop courtes (< 20)
   useEffect(() => {
     if (!isOfficialTemplate(config.gameId)) return;
+    const strips = [...mathConfig.basegameStrips, ...mathConfig.freegameStrips];
     const paytableSymbols = new Set((config.symbols ?? []).map((s: { name: string }) => s.name));
-    const allReelSymbols = new Set<string>();
-    [...mathConfig.basegameStrips, ...mathConfig.freegameStrips].forEach((strip) => {
-      strip.reels.forEach((reel) => reel.forEach((sym) => allReelSymbols.add(sym)));
+    let unknownCount = 0;
+    let wrongReelCount = false;
+    let tooShort = false;
+    strips.forEach((strip) => {
+      if (strip.reels.length !== config.numReels) wrongReelCount = true;
+      strip.reels.forEach((reel) => {
+        if (reel.length < 20) tooShort = true;
+        reel.forEach((sym) => { if (!paytableSymbols.has(sym)) unknownCount++; });
+      });
     });
-    const unknown = [...allReelSymbols].filter((s) => !paytableSymbols.has(s));
-    if (unknown.length === 0) return;
+    if (unknownCount === 0 && !wrongReelCount && !tooShort) return;
     const brReels = generateAutoReelstrip(config, "basegame", 50);
     const frReels = config.freeSpins?.enabled ? generateAutoReelstrip(config, "freegame", 50) : brReels;
     updateMathConfig({
       basegameStrips: [{ id: "BR0", name: "BR0", weight: 1, reels: brReels }],
       freegameStrips: config.freeSpins?.enabled ? [{ id: "FR0", name: "FR0", weight: 1, reels: frReels }] : mathConfig.freegameStrips,
     });
-  }, [config.gameId, config.symbols, config.freeSpins?.enabled]);
+  }, [config.gameId, config.symbols, config.numReels, config.freeSpins?.enabled]);
 
   const handleValidation = useCallback((hasErrors: boolean) => {
     setHasBlockingErrors(hasErrors);

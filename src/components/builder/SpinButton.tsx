@@ -35,8 +35,7 @@ export function SpinButton({ spinning, disabled, onClick, config, compact = fals
   };
 
   const getIcon = () => {
-    if (spinning) return <span className="animate-spin">🎰</span>;
-    
+    // Garder le bouton choisi (pas de logo slot qui tourne pendant le spin)
     switch (config.icon) {
       case "arrow":
         return <ArrowLeftRight className="h-6 w-6" style={{ color: config.iconColor }} />;

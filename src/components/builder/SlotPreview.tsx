@@ -1452,18 +1452,20 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
         />
         <CelebrationEffect
           active={showCelebration}
-          multiplier={totalWin}
+          multiplier={Number.isFinite(totalWin) ? totalWin : 0}
           style={ve.celebrationStyle}
-          bet={bet}
+          bet={Number.isFinite(bet) ? bet : 0}
         />
         {showCelebration && (() => {
-          const tier = celebrationTierOverride ?? getWinTierFromMultiplier(totalWin);
+          const safeTotalWin = Number.isFinite(totalWin) ? totalWin : 0;
+          const tier = celebrationTierOverride ?? getWinTierFromMultiplier(safeTotalWin);
           const { builtIn, intensity } = getCelebrationWinConfig(config, tier);
+          const safeIntensity = intensity === "low" || intensity === "medium" || intensity === "overthetop" ? intensity : "low";
           return (
             <WinAnimationOverlay
               active
-              builtIn={builtIn}
-              intensity={intensity}
+              builtIn={builtIn ?? "coins_fall"}
+              intensity={safeIntensity}
             />
           );
         })()}
