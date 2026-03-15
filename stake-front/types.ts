@@ -10,6 +10,8 @@ export type EmbedConfig = {
   gridBorderColor?: string;
   bodyBackgroundUrl?: string | null;
   backgroundUrl?: string | null;
+  /** "video" = fond vidéo (ex. MP4), sinon fond image */
+  backgroundType?: "image" | "video";
   symbolIdToUrl?: (string | null)[];
   symbolIdToName?: (string | null)[];
   tumbleEnabled?: boolean;

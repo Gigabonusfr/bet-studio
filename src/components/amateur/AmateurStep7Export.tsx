@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import JSZip from "jszip";
 import { useGameConfig } from "@/context/GameConfigContext";
 import { useMathConfig } from "@/context/MathConfigContext";
@@ -18,18 +18,19 @@ import {
   generateStakeEnginePy,
   generateConfigFeJson,
 } from "@/lib/stake-engine-generator";
+import { isOfficialTemplate } from "@/data/official-stake-templates";
 import type { OfficialTemplateId } from "@/data/official-stake-templates";
 import type { SkinConfig } from "@/types/skin-config";
 import type { GameConfig } from "@/types/game-config";
 
-/** Ordre des symbolIds officiels → id dans GameConfig (h1, l1, wild, scatter) */
+/** Ordre des symbolIds officiels (aligné SDK : H1-H5, L1-L4, WILD, SCATTER, BONUS — pas de L5). */
 const SYMBOL_ID_TO_CONFIG_ID: (string | null)[] = [
-  "h1", "h2", "h3", "h4", "h5", "l1", "l2", "l3", "l4", "l5", "wild", "scatter",
+  "h1", "h2", "h3", "h4", "h5", "l1", "l2", "l3", "l4", "wild", "scatter", "bonus",
 ];
 
 /** Ordre symbolId (RGS) -> nom pour fallback / debug côté front */
 const SYMBOL_ID_TO_NAME: (string | null)[] = [
-  "H1", "H2", "H3", "H4", "H5", "L1", "L2", "L3", "L4", "L5", "WILD", "SCATTER",
+  "H1", "H2", "H3", "H4", "H5", "L1", "L2", "L3", "L4", "WILD", "SCATTER", "BONUS",
 ];
 
 /** Génère le script Node prepare-publish.js (à exécuter après les simuls Math SDK) */
@@ -123,13 +124,31 @@ function buildSkinConfigFromGameConfig(config: GameConfig): SkinConfig | Record<
 
 export function AmateurStep7Export() {
   const { config } = useGameConfig();
-  const { mathConfig } = useMathConfig();
+  const { mathConfig, updateMathConfig } = useMathConfig();
   const { config: controlsConfig } = useSlotControls();
   const [isGenerating, setIsGenerating] = useState(false);
   const [exported, setExported] = useState(false);
   const [hasBlockingErrors, setHasBlockingErrors] = useState(false);
 
   const gameId = config.gameId || config.gameName.toLowerCase().replace(/[^a-z0-9]/g, "_") || "my_slot_game";
+
+  // Pour les templates officiels : si les reelstrips contiennent des symboles absents de la config (ex. L5), on régénère des strips valides
+  useEffect(() => {
+    if (!isOfficialTemplate(config.gameId)) return;
+    const paytableSymbols = new Set((config.symbols ?? []).map((s: { name: string }) => s.name));
+    const allReelSymbols = new Set<string>();
+    [...mathConfig.basegameStrips, ...mathConfig.freegameStrips].forEach((strip) => {
+      strip.reels.forEach((reel) => reel.forEach((sym) => allReelSymbols.add(sym)));
+    });
+    const unknown = [...allReelSymbols].filter((s) => !paytableSymbols.has(s));
+    if (unknown.length === 0) return;
+    const brReels = generateAutoReelstrip(config, "basegame", 50);
+    const frReels = config.freeSpins?.enabled ? generateAutoReelstrip(config, "freegame", 50) : brReels;
+    updateMathConfig({
+      basegameStrips: [{ id: "BR0", name: "BR0", weight: 1, reels: brReels }],
+      freegameStrips: config.freeSpins?.enabled ? [{ id: "FR0", name: "FR0", weight: 1, reels: frReels }] : mathConfig.freegameStrips,
+    });
+  }, [config.gameId, config.symbols, config.freeSpins?.enabled]);
 
   const handleValidation = useCallback((hasErrors: boolean) => {
     setHasBlockingErrors(hasErrors);
@@ -210,23 +229,35 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
 
       const origin = window.location.origin;
       const exportAssets: { backgroundUrl?: string | null; symbolIdToUrl?: (string | null)[] } = {};
-      const assetUrls: { url: string; filename: string }[] = [];
+      const assetUrls: { url: string; filename: string; isVideo?: boolean }[] = [];
       const isAbsoluteAssetUrl = (u: string) =>
         u.startsWith("http://") || u.startsWith("https://") || u.startsWith("blob:") || u.startsWith("data:");
       const toFetchableUrl = (u: string) => (isAbsoluteAssetUrl(u) ? u : origin + (u.startsWith("/") ? u : "/" + u));
       const bgUrl =
         (config as { backgroundUrl?: string }).backgroundUrl ??
         (config as { assetsConfig?: { backgroundAsset?: string } }).assetsConfig?.backgroundAsset;
+      const backgroundType = (config as { backgroundType?: "image" | "video" }).backgroundType ?? "image";
       if (bgUrl && typeof bgUrl === "string") {
         const path = toFetchableUrl(bgUrl);
-        const ext = path.match(/\.(jpe?g|png|gif|webp|svg|bmp)(?:\?|$)/i)?.[1]?.toLowerCase() || "jpg";
-        assetUrls.push({ url: path, filename: `background.${ext === "jpeg" ? "jpg" : ext}` });
+        const isVideoBg = backgroundType === "video" || /\.mp4(\?|$)/i.test(path) || /^data:video\/mp4/i.test(path);
+        if (isVideoBg) {
+          assetUrls.push({ url: path, filename: "background.mp4", isVideo: true });
+        } else {
+          const extFromPath = path.match(/\.(jpe?g|png|gif|webp|svg|bmp)(?:\?|$)/i)?.[1]?.toLowerCase();
+          let extFromData: string | null = null;
+          if (path.startsWith("data:")) {
+            const m = path.match(/^data:image\/(\w+)/i);
+            extFromData = m ? (m[1].toLowerCase() === "jpeg" ? "jpg" : m[1].toLowerCase()) : null;
+          }
+          const ext = extFromData || extFromPath || "jpg";
+          assetUrls.push({ url: path, filename: `background.${ext === "jpeg" ? "jpg" : ext}` });
+        }
       } else {
         exportAssets.backgroundUrl = null;
       }
-      const symbolNames = ["H1", "H2", "H3", "H4", "H5", "L1", "L2", "L3", "L4", "L5", "WILD", "SCATTER"];
+      const symbolNames = config.symbols?.map((s: { name: string }) => s.name) ?? ["H1", "H2", "H3", "H4", "H5", "L1", "L2", "L3", "L4", "WILD", "SCATTER", "BONUS"];
       // On fusionne:
-      //  - assetsConfig.symbolAssets (Step6 Assets)
+      //  - assetsConfig.symbolAssets (Step6 Assets, incl. assets importés depuis le PC)
       //  - customImageUrl des symboles (upload direct dans Step2 Symbols)
       const baseSymbolAssets =
         (config as { assetsConfig?: { symbolAssets?: Record<string, string | null> } }).assetsConfig?.symbolAssets ??
@@ -242,27 +273,48 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
         ) as string[];
         const alreadyHasKey = keysToCheck.some((k) => symbolAssetsMap[k] != null);
         if (alreadyHasKey) return;
-        // On privilégie l'id (h1/h2/...) pour rester aligné avec la config
         const storeKey = keyId || keyName;
         if (!storeKey) return;
         symbolAssetsMap[storeKey] = customUrl;
       });
+      // Noms canoniques pour l'ordre officiel (embed symbolIdToUrl)
+      const symbolIdToFilename: Record<string, string> = {};
+      const addedUrls = new Set<string>();
       symbolNames.forEach((name) => {
         const url = symbolAssetsMap[name] ?? symbolAssetsMap[name.toLowerCase()] ?? null;
         if (url && typeof url === "string") {
           const path = toFetchableUrl(url);
-          const extMatch = path.match(/\.(jpe?g|png|gif|webp|svg|bmp)(?:\?|$)/i)?.[1]?.toLowerCase();
+          const dataM = path.startsWith("data:") ? path.match(/^data:image\/(\w+)/i) : null;
+          const pathM = path.match(/\.(jpe?g|png|gif|webp|svg|bmp)(?:\?|$)/i);
+          const extMatch = dataM ? (dataM[1].toLowerCase() === "jpeg" ? "jpg" : dataM[1].toLowerCase()) : pathM?.[1]?.toLowerCase();
           const ext = extMatch ? (extMatch === "jpeg" ? "jpg" : extMatch) : "png";
-          assetUrls.push({ url: path, filename: `${name}.${ext}` });
+          const filename = `${name}.${ext}`;
+          assetUrls.push({ url: path, filename });
+          addedUrls.add(path);
+          symbolIdToFilename[name] = filename;
+          symbolIdToFilename[name.toLowerCase()] = filename;
         }
+      });
+      // Inclure tous les autres symboles du config (ids personnalisés, ex. cherry, lemon) pour que les assets importés soient bien exportés
+      Object.entries(symbolAssetsMap).forEach(([symbolId, url]) => {
+        if (!url || typeof url !== "string") return;
+        const path = toFetchableUrl(url);
+        if (addedUrls.has(path)) return;
+        const safeId = symbolId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 32) || "symbol";
+        const dataM = path.startsWith("data:") ? path.match(/^data:image\/(\w+)/i) : null;
+        const pathM = path.match(/\.(jpe?g|png|gif|webp|svg|bmp)(?:\?|$)/i);
+        const extMatch = dataM ? (dataM[1].toLowerCase() === "jpeg" ? "jpg" : dataM[1].toLowerCase()) : pathM?.[1]?.toLowerCase();
+        const ext = extMatch ? (extMatch === "jpeg" ? "jpg" : extMatch) : "png";
+        const filename = `${safeId}.${ext}`;
+        assetUrls.push({ url: path, filename });
+        addedUrls.add(path);
+        symbolIdToFilename[symbolId] = filename;
+        symbolIdToFilename[symbolId.toLowerCase()] = filename;
       });
 
       const exportSymbolIdToUrl: (string | null)[] = symbolNames.map((name) => {
-        const url = symbolAssetsMap[name] ?? symbolAssetsMap[name.toLowerCase()] ?? null;
-        if (!url) return null;
-        const path = toFetchableUrl(url);
-        const entry = assetUrls.find((a) => a.url === path);
-        return entry ? `assets/${entry.filename}` : null;
+        const filename = symbolIdToFilename[name] ?? symbolIdToFilename[name.toLowerCase()];
+        return filename ? `assets/${filename}` : null;
       });
       exportAssets.symbolIdToUrl = exportSymbolIdToUrl;
 
@@ -283,6 +335,20 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
         if (!m) return "";
         const subtype = m[1].toLowerCase();
         return subtype === "jpeg" ? "jpg" : subtype;
+      }
+      /** Décode une data URL (ex. assets importés depuis le PC) en ArrayBuffer pour écriture directe dans le ZIP. */
+      function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer | null {
+        try {
+          const comma = dataUrl.indexOf(",");
+          if (comma === -1) return null;
+          const base64 = dataUrl.slice(comma + 1);
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          return bytes.buffer;
+        } catch {
+          return null;
+        }
       }
       function extFromUrlPath(pathOrUrl: string): string {
         const match = pathOrUrl.match(/\.(jpe?g|png|gif|webp|svg|bmp)(?:\?|$)/i);
@@ -338,8 +404,49 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
         });
       }
       const savedFilenames: Map<string, string> = new Map();
-      for (const { url, filename } of assetUrls) {
+      for (const { url, filename, isVideo } of assetUrls) {
         try {
+          const base = filename.startsWith("background.") ? "background" : filename.replace(/\.[^.]+$/, "");
+          const isDataUrl = url.startsWith("data:");
+          const isVideoAsset = isVideo === true || filename.toLowerCase().endsWith(".mp4");
+
+          if (isDataUrl) {
+            // Assets importés depuis le PC (data URL) : décoder directement sans fetch pour fiabilité
+            const buf = dataUrlToArrayBuffer(url);
+            if (!buf) {
+              if (filename.startsWith("background.")) exportAssets.backgroundUrl = null;
+              continue;
+            }
+            if (isVideoAsset) {
+              // Vidéo (ex. background MP4 en data URL) : écrire telle quelle
+              assetsFolder?.file("background.mp4", buf);
+              savedFilenames.set(filename, "background.mp4");
+              if (filename.startsWith("background.")) exportAssets.backgroundUrl = "assets/background.mp4";
+              continue;
+            }
+            const bytes = new Uint8Array(buf);
+            let rawExt = extFromDataUrl(url) || filename.replace(/^.*\./, "").toLowerCase() || "png";
+            let actualExt = rawExt === "jpeg" ? "jpg" : rawExt;
+            let finalBuf: ArrayBuffer = buf;
+            if (url.startsWith("data:image/svg+xml")) {
+              const pngBlob = await svgDataUrlToPngBlob(url, 256);
+              if (pngBlob) {
+                finalBuf = await pngBlob.arrayBuffer();
+                actualExt = "png";
+              }
+            }
+            const safeExt = ["jpg", "png", "gif", "webp", "svg", "bmp"].includes(actualExt) ? actualExt : "png";
+            const actualFilename = `${base}.${safeExt}`;
+            if (!looksLikeImageBytes(safeExt, new Uint8Array(finalBuf))) {
+              if (filename.startsWith("background.")) exportAssets.backgroundUrl = null;
+              continue;
+            }
+            assetsFolder?.file(actualFilename, finalBuf);
+            savedFilenames.set(filename, actualFilename);
+            if (filename.startsWith("background.")) exportAssets.backgroundUrl = `assets/${actualFilename}`;
+            continue;
+          }
+
           const res = await fetch(url);
           if (!res.ok) {
             if (filename.startsWith("background.")) exportAssets.backgroundUrl = null;
@@ -347,6 +454,18 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
           }
           const blob = await res.blob();
           const contentType = res.headers.get("Content-Type") || blob.type || "";
+
+          if (isVideoAsset || /^video\//i.test(contentType)) {
+            // Vidéo (ex. background MP4 blob URL) : écrire telle quelle
+            const buf = await blob.arrayBuffer();
+            const ext = /^video\//i.test(contentType) ? (contentType.includes("mp4") ? "mp4" : "webm") : "mp4";
+            const actualFilename = filename.startsWith("background.") ? `background.${ext}` : filename;
+            assetsFolder?.file(actualFilename, buf);
+            savedFilenames.set(filename, actualFilename);
+            if (filename.startsWith("background.")) exportAssets.backgroundUrl = `assets/${actualFilename}`;
+            continue;
+          }
+
           const looksLikeImage =
             /^image\//i.test(contentType) ||
             (typeof blob.type === "string" && blob.type.startsWith("image/")) ||
@@ -364,7 +483,6 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
             filename.replace(/^.*\./, "").toLowerCase() ||
             "png";
           const safeExt = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(ext) ? (ext === "jpeg" ? "jpg" : ext) : "png";
-          const base = filename.startsWith("background.") ? "background" : filename.replace(/\.[^.]+$/, "");
           let finalBlob: Blob = blob;
           let actualExt = safeExt;
           if (safeExt === "svg" || url.startsWith("data:image/svg+xml")) {
@@ -383,7 +501,6 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
             }
           }
           const actualFilename = `${base}.${actualExt}`;
-          // JSZip + navigateur: écrire des bytes (ArrayBuffer) évite les fichiers images corrompus.
           const buf = await finalBlob.arrayBuffer();
           const bytes = new Uint8Array(buf);
           if (!looksLikeImageBytes(actualExt, bytes)) {
@@ -399,7 +516,7 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
           if (filename.startsWith("background.")) exportAssets.backgroundUrl = null;
         }
       }
-      const symbolNamesList = ["H1", "H2", "H3", "H4", "H5", "L1", "L2", "L3", "L4", "L5", "WILD", "SCATTER"];
+      const symbolNamesList = config.symbols?.map((s: { name: string }) => s.name) ?? ["H1", "H2", "H3", "H4", "H5", "L1", "L2", "L3", "L4", "WILD", "SCATTER", "BONUS"];
       symbolNamesList.forEach((name, i) => {
         const prev = exportAssets.symbolIdToUrl?.[i];
         if (!prev) return;
@@ -428,6 +545,7 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
         gridBorderColor: config.visualEffects?.gridBorderColor ?? "#FFD700",
         bodyBackgroundUrl: exportAssets.backgroundUrl || null,
         backgroundUrl: exportAssets.backgroundUrl || null,
+        backgroundType: backgroundType,
         symbolIdToUrl: exportAssets.symbolIdToUrl ?? [],
         symbolIdToName: SYMBOL_ID_TO_NAME,
         tumbleEnabled: config.tumbleEnabled ?? true,
@@ -453,8 +571,8 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
           visualEffects: config.visualEffects,
           animation: config.animation,
           audio: config.audio,
-          // Force l'asset background et images vers les fichiers exportés
-          backgroundType: "image",
+          // Force l'asset background et images vers les fichiers exportés (image ou vidéo MP4)
+          backgroundType: backgroundType,
           backgroundUrl: exportAssets.backgroundUrl || "",
           assetsConfig: {
             ...(config as any).assetsConfig,

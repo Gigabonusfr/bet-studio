@@ -17,10 +17,23 @@ export interface ValidationResult {
   message: string;
 }
 
+export interface ValidateExportOptions {
+  /** En mode strict, certaines règles recommandées deviennent bloquantes (noms de modes, FR0, reelstrip 30+). */
+  strictForStake?: boolean;
+}
+
+const STRICT_ERROR_IDS = [
+  "math-reelstrip-length",
+  "math-fr0",
+  "betmodes-base-name",
+  "betmodes-bonus-name",
+];
+
 export function validateExport(
   config: GameConfig,
   mathConfig: MathConfig,
-  controlsConfig?: SlotControlsConfig
+  controlsConfig?: SlotControlsConfig,
+  options?: ValidateExportOptions
 ): ValidationResult[] {
   const results: ValidationResult[] = [];
 
@@ -119,17 +132,32 @@ export function validateExport(
     message: rtpMessage,
   });
 
-  // 7. Reelstrip minimum positions
+  // 7. Reelstrip minimum positions (error < 20, warning 20–29)
   const allStrips = [...mathConfig.basegameStrips, ...mathConfig.freegameStrips];
-  const shortStrips = allStrips.filter((s) => s.reels.some((r) => r.length < 20));
+  const stripsUnder20 = allStrips.filter((s) => s.reels.some((r) => r.length < 20));
+  const stripsUnder30 = allStrips.filter((s) => s.reels.some((r) => r.length >= 20 && r.length < 30));
   results.push({
     id: "math-reelstrip-length",
     category: "math",
     label: "Longueur reelstrips (min 20)",
-    level: shortStrips.length > 0 ? "warning" : "pass",
-    message: shortStrips.length > 0
-      ? `Reelstrips trop courtes : ${shortStrips.map((s) => s.id).join(", ")} (recommandé: 30+ positions/reel).`
-      : "Toutes les reelstrips ont une longueur suffisante.",
+    level: stripsUnder20.length > 0 ? "error" : stripsUnder30.length > 0 ? "warning" : "pass",
+    message: stripsUnder20.length > 0
+      ? `Reelstrips trop courtes (< 20) : ${stripsUnder20.map((s) => s.id).join(", ")} — obligatoire 20+ positions/reel.`
+      : stripsUnder30.length > 0
+      ? `Reelstrips avec 20–29 positions : ${stripsUnder30.map((s) => s.id).join(", ")} — recommandé 30+ pour les simulations Stake.`
+      : "Toutes les reelstrips ont une longueur suffisante (30+).",
+  });
+
+  // 7b. Nombre de rouleaux cohérent avec la grille (config.numReels)
+  const stripsWrongReelCount = allStrips.filter((s) => s.reels.length !== config.numReels);
+  results.push({
+    id: "math-reelstrip-reel-count",
+    category: "math",
+    label: "Nombre de rouleaux (reelstrip = grille)",
+    level: stripsWrongReelCount.length > 0 ? "error" : "pass",
+    message: stripsWrongReelCount.length > 0
+      ? `Reelstrip(s) avec un mauvais nombre de rouleaux : ${stripsWrongReelCount.map((s) => s.id).join(", ")} (${stripsWrongReelCount[0]?.reels.length ?? 0} au lieu de ${config.numReels}).`
+      : `Toutes les reelstrips ont ${config.numReels} rouleau(x), conforme à la grille.`,
   });
 
   // 8. BR0 present
@@ -205,6 +233,29 @@ export function validateExport(
       message: config.freeSpins.costMultiplier > 1.0
         ? `Mode bonus configuré avec cost=${config.freeSpins.costMultiplier}x.`
         : `⛔ Mode bonus avec cost=${config.freeSpins.costMultiplier} — doit être > 1.0.`,
+    });
+  }
+
+  // Noms de modes recommandés pour publication Stake (base, bonus/freegame)
+  results.push({
+    id: "betmodes-base-name",
+    category: "betmodes",
+    label: "Nom du mode base (recommandé)",
+    level: config.baseBetMode.name === "base" ? "pass" : "warning",
+    message: config.baseBetMode.name === "base"
+      ? "Mode base nommé 'base' — conforme à l'exemple Stake."
+      : "Pour une publication Stake, le mode base est recommandé avec le nom 'base'.",
+  });
+  if (config.freeSpins.enabled) {
+    const bonusNameOk = ["bonus", "freegame"].includes(config.freeSpins.modeName);
+    results.push({
+      id: "betmodes-bonus-name",
+      category: "betmodes",
+      label: "Nom du mode bonus (recommandé)",
+      level: bonusNameOk ? "pass" : "warning",
+      message: bonusNameOk
+        ? `Mode bonus nommé '${config.freeSpins.modeName}' — conforme à l'exemple Stake.`
+        : "Pour une publication Stake, le mode bonus est recommandé avec le nom 'bonus' ou 'freegame'.",
     });
   }
 
@@ -388,6 +439,12 @@ export function validateExport(
           )}). Vérifiez la checklist Stake/Stake.US (renommer ou contextualiser).`,
   });
 
+  // Mode strict pour soumission Stake : certaines recommandations deviennent bloquantes
+  if (options?.strictForStake) {
+    return results.map((r) =>
+      r.level === "warning" && STRICT_ERROR_IDS.includes(r.id) ? { ...r, level: "error" as const } : r
+    );
+  }
   return results;
 }
 

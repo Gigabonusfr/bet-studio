@@ -20,6 +20,10 @@ interface IntegratedLayoutProps {
   buyBonus: () => void;
   stats: { spins: number; wagered: number; won: number };
   rtp: string;
+  /** En mode local : libellé explicite (ex. "RTP (session mock)") */
+  rtpLabel?: string;
+  /** Alerte si RTP affiché n'est pas le RTP théorique (mode local sans RGS) */
+  rtpWarning?: string;
   showPaylines: boolean;
   setShowPaylines: (show: boolean) => void;
   config: GameConfig;
@@ -44,6 +48,8 @@ export function IntegratedLayout({
   buyBonus,
   stats,
   rtp,
+  rtpLabel,
+  rtpWarning,
   showPaylines,
   setShowPaylines,
   config,
@@ -351,11 +357,18 @@ export function IntegratedLayout({
 
       {/* Stats (builder/dev) */}
       {showStats && (
-        <div className="max-w-5xl mx-auto mt-2 flex gap-4 text-xs text-muted-foreground font-mono">
-          <span>Tours: {stats.spins}</span>
-          <span>Misé: ${stats.wagered.toFixed(2)}</span>
-          <span>Gagné: ${stats.won.toFixed(2)}</span>
-          <span>RTP: {rtp}%</span>
+        <div className="max-w-5xl mx-auto mt-2 flex flex-col gap-1">
+          <div className="flex gap-4 text-xs text-muted-foreground font-mono">
+            <span>Tours: {stats.spins}</span>
+            <span>Misé: ${stats.wagered.toFixed(2)}</span>
+            <span>Gagné: ${stats.won.toFixed(2)}</span>
+            <span>{rtpLabel ?? "RTP"}: {rtp}%</span>
+          </div>
+          {rtpWarning && (
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-mono max-w-xl" title={rtpWarning}>
+              ⚠️ {rtpWarning}
+            </p>
+          )}
         </div>
       )}
     </div>

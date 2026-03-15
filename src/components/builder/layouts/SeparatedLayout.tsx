@@ -18,6 +18,10 @@ interface SeparatedLayoutProps {
   buyBonus: () => void;
   stats: { spins: number; wagered: number; won: number };
   rtp: string;
+  /** En mode local : libellé explicite (ex. "RTP (session mock)") */
+  rtpLabel?: string;
+  /** Alerte si RTP affiché n'est pas le RTP théorique (mode local sans RGS) */
+  rtpWarning?: string;
   showPaylines: boolean;
   setShowPaylines: (show: boolean) => void;
   config: GameConfig;
@@ -41,6 +45,8 @@ export function SeparatedLayout({
   buyBonus,
   stats,
   rtp,
+  rtpLabel,
+  rtpWarning,
   showPaylines,
   setShowPaylines,
   config,
@@ -173,7 +179,7 @@ export function SeparatedLayout({
 
           {/* Stats (builder/dev) */}
           {showStats && (
-            <div className="p-3 rounded-lg border border-border">
+            <div className="p-3 rounded-lg border border-border space-y-2">
               <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                 <div className="flex flex-col">
                   <span className="text-muted-foreground">Tours</span>
@@ -188,10 +194,15 @@ export function SeparatedLayout({
                   <span className="font-bold text-emerald-400">${stats.won.toFixed(2)}</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-muted-foreground">RTP</span>
+                  <span className="text-muted-foreground">{rtpLabel ?? "RTP"}</span>
                   <span className="font-bold">{rtp}%</span>
                 </div>
               </div>
+              {rtpWarning && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-mono" title={rtpWarning}>
+                  ⚠️ {rtpWarning}
+                </p>
+              )}
             </div>
           )}
 

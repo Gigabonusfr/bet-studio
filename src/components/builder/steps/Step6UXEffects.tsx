@@ -67,7 +67,8 @@ export function Step6UXEffects() {
       <Section title="Effets Visuels" icon="✨">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label className="text-foreground text-xs">Effet de Particules</Label>
+            <Label className="text-foreground text-xs">Effet de Particules (secours)</Label>
+            <p className="text-[10px] text-muted-foreground">Utilisé si aucun effet n’est activé dans l’étape Assets (section 3).</p>
             <Select value={ve.particleEffect} onValueChange={(v) => setVE({ particleEffect: v as ParticleEffect })}>
               <SelectTrigger className="bg-input border-border text-foreground"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-popover border-border">
@@ -77,7 +78,7 @@ export function Step6UXEffects() {
               </SelectContent>
             </Select>
           </div>
-          <SliderField label="Intensité Particules" value={ve.particleIntensity} onChange={(v) => setVE({ particleIntensity: v })} min={10} max={100} step={5} suffix="%" />
+          <SliderField label="Intensité Particules (secours)" value={ve.particleIntensity} onChange={(v) => setVE({ particleIntensity: v })} min={10} max={100} step={5} suffix="%" />
           <div className="space-y-1.5">
             <Label className="text-foreground text-xs">Animation Symboles</Label>
             <Select value={ve.symbolAnimation} onValueChange={(v) => setVE({ symbolAnimation: v as typeof ve.symbolAnimation })}>

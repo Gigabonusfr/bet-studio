@@ -21,9 +21,9 @@ export interface RgsWinEvent {
   [key: string]: unknown;
 }
 
-/** Event d'un round (reveal, winInfo, setWin, finalWin) */
+/** Event d'un round (reveal, winInfo, setWin, finalWin, freeSpinsTrigger) */
 export interface RgsRoundEvent {
-  type: "reveal" | "winInfo" | "setWin" | "finalWin";
+  type: "reveal" | "winInfo" | "setWin" | "finalWin" | "freeSpinsTrigger";
   /** Board avec symbolId numériques [reel][row] */
   board?: number[][];
   wins?: RgsWinEvent[];
@@ -31,6 +31,9 @@ export interface RgsRoundEvent {
   amount?: number;
   balance?: number;
   gameType?: "basegame" | "freegame";
+  /** freeSpinsTrigger : nombre de scatters et free spins accordés (4 scatters min → 2 par scatter) */
+  scatterCount?: number;
+  freeSpinsAwarded?: number;
   [key: string]: unknown;
 }
 
@@ -81,15 +84,17 @@ export class RgsClient {
     };
   }
 
-  async play(bet: number): Promise<RgsPlayResponse> {
+  async play(bet: number, gameId?: string): Promise<RgsPlayResponse> {
     if (!this.sessionId) throw new Error("Not authenticated");
+    const body: { sessionID: string; bet: number; gameId?: string } = {
+      sessionID: this.sessionId,
+      bet,
+    };
+    if (gameId) body.gameId = gameId;
     const res = await fetch(`${this.baseUrl}/wallet/play`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionID: this.sessionId,
-        bet,
-      }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`RGS play failed: ${res.status}`);
     const data = await res.json();
@@ -132,7 +137,7 @@ export class MockRgsClient {
     };
   }
 
-  async play(bet: number): Promise<RgsPlayResponse> {
+  async play(bet: number, _gameId?: string): Promise<RgsPlayResponse> {
     if (bet > this.balance) {
       throw new Error("ERR_IPB"); // Insufficient Player Balance
     }

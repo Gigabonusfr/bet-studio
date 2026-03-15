@@ -1,9 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useGameConfig } from "@/context/GameConfigContext";
 import { useMathConfig } from "@/context/MathConfigContext";
 import { useSlotControls } from "@/context/SlotControlsContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { CheckCircle, AlertTriangle, XCircle, Shield, ExternalLink, FileText } from "lucide-react";
 import { validateExport, hasBlockingErrors, type ValidationResult, type ValidationLevel } from "@/lib/stake-engine-validator";
 import { DOCS } from "@/constants/docs-links";
@@ -32,12 +34,13 @@ export function ExportValidator({ onValidation }: { onValidation?: (hasErrors: b
   const { config } = useGameConfig();
   const { mathConfig } = useMathConfig();
   const { config: controlsConfig } = useSlotControls();
+  const [strictForStake, setStrictForStake] = useState(false);
 
   const results = useMemo(() => {
-    const r = validateExport(config, mathConfig, controlsConfig);
+    const r = validateExport(config, mathConfig, controlsConfig, { strictForStake });
     onValidation?.(hasBlockingErrors(r));
     return r;
-  }, [config, mathConfig, controlsConfig, onValidation]);
+  }, [config, mathConfig, controlsConfig, strictForStake, onValidation]);
 
   const grouped = useMemo(() => {
     const groups: Record<string, ValidationResult[]> = {};
@@ -70,6 +73,18 @@ export function ExportValidator({ onValidation }: { onValidation?: (hasErrors: b
           <FileText className="h-3 w-3" />
           Checklist complète : <code className="text-[10px] bg-muted px-1 rounded">docs/STAKE_ENGINE.md</code>
         </span>
+      </div>
+
+      {/* Mode strict pour soumission Stake */}
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="strict-stake"
+          checked={strictForStake}
+          onCheckedChange={(checked) => setStrictForStake(checked === true)}
+        />
+        <Label htmlFor="strict-stake" className="text-sm font-normal cursor-pointer">
+          Préparation soumission Stake (mode strict) — noms de modes, FR0 et reelstrips 30+ deviennent obligatoires
+        </Label>
       </div>
 
       {/* Summary */}

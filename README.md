@@ -50,6 +50,10 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
+## Preview avec les maths Stake Engine (RTP / Free Spins réalistes)
+
+Pour les templates officiels (0_0_lines, 0_0_ways, 0_0_cluster, 0_0_scatter, 0_0_expwilds), la prévisualisation peut utiliser les maths du Stake Engine au lieu du calcul local. Passez en query string l’URL du backend RGS et un session ID : `?rgs_url=https://votre-backend&sessionID=xxx`. En mode Amateur, si un template officiel est sélectionné et que ces paramètres sont présents, la preview joue en mode RGS (board et gains depuis le backend). Sans RGS, la preview reste en mode local avec RTP et free spins plafonnés.
+
 ## What technologies are used for this project?
 
 This project is built with:

@@ -117,6 +117,17 @@ Ces vérifications sont exécutées dans l’app par `stake-engine-validator` et
 | `frontend-controls-turbo` | Toggle TURBO disponible | warning / pass | Si mode TURBO activé en config, toggle visible dans la barre. |
 | `frontend-cta-wording` | Wording CTA sensible | warning / pass | Pas de wording type gamble, double or nothing, all in dans les labels CTA principaux. |
 
+### 5.5 Conformité upload Stake (vérifications côté Stake à l’import)
+
+Lors de l’upload des fichiers math sur Stake Engine, les vérifications suivantes sont effectuées (réf. [data_format](https://stakeengine.github.io/math-sdk/rgs_docs/data_format/)) :
+
+- **index.json** : doit exister à la racine du dossier d’upload, avec une structure stricte `modes` : chaque entrée contient `name`, `cost`, `events` (nom du fichier `.jsonl.zst`), `weights` (nom du fichier CSV).
+- **Fichiers référencés** : les fichiers `books_<mode>.jsonl.zst` et `lookUpTable_<mode>_0.csv` indiqués dans l’index doivent être présents.
+- **Correspondance payoutMultiplier** : pour chaque round, la valeur `payoutMultiplier` dans le game logic (books) doit **correspondre exactement** à celle du CSV (lookup table). Stake effectue une vérification / hash à l’upload ; toute incohérence entraîne un rejet.
+- **Format CSV** : colonnes en `uint64` — simulation number (id), round probability (weight), payout multiplier. Pas d’en-tête.
+
+En amont, le validateur BetStudio (section 5) et le mode « Préparation soumission Stake » (strict) aident à respecter ces exigences (noms de modes `base` / `bonus` ou `freegame`, FR0, reelstrips 30+).
+
 ---
 
 ## 6. Checklist de soumission post-export (Stake Engine)

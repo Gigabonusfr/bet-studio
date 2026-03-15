@@ -145,7 +145,7 @@ ${c.freeSpins.enabled ? "- [ ] Free spin reel strips created (FR0.csv)" : ""}
 ${c.freeSpins.enabled ? `- [ ] books_${c.freeSpins.modeName}.jsonl.zst — bonus rounds` : ""}
 - [ ] lookUpTable_${c.baseBetMode.name}_0.csv — base weights
 ${c.freeSpins.enabled ? `- [ ] lookUpTable_${c.freeSpins.modeName}_0.csv — bonus weights` : ""}
-- [ ] payoutMultiplier matches between CSV and .jsonl.zst
+- [ ] payoutMultiplier matches between CSV and .jsonl.zst (les valeurs doivent correspondre exactement — vérification/hash côté Stake à l’upload)
 
 ### Compliance
 - [ ] Game is fully stateless

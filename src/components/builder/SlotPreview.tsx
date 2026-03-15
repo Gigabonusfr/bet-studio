@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useGameConfig } from "@/context/GameConfigContext";
 import { useSlotControls } from "@/context/SlotControlsContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Plus, Minus, Zap, ShoppingCart, Play, ArrowLeftRight, Dices, X, Search, Upload, Monitor, Smartphone } from "lucide-react";
-import type { SymbolDef, VisualEffectsConfig } from "@/types/game-config";
+import type { SymbolDef, VisualEffectsConfig, ParticleEffect } from "@/types/game-config";
 import { ParticleSystem } from "./ParticleSystem";
 import { CelebrationEffect } from "./CelebrationEffect";
+import { WinAnimationOverlay } from "./WinAnimationOverlay";
+import type { WinTier } from "@/types/asset-types";
 import { Switch } from "@/components/ui/switch";
 import { ControlsCustomizer } from "./ControlsCustomizer";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,7 @@ import type { AssetsConfig } from "@/types/asset-types";
 import { DEFAULT_ASSETS_CONFIG } from "@/types/asset-types";
 import { cn } from "@/lib/utils";
 import { useRgsClient } from "@/context/RgsContext";
+import { isOfficialTemplate } from "@/data/official-stake-templates";
 import type { RgsRoundEvent, RgsWinEvent } from "@/lib/rgs-client";
 import { DEFAULT_SKIN } from "@/types/game-config";
 
@@ -28,8 +31,194 @@ import { DEFAULT_SKIN } from "@/types/game-config";
 const DEFAULT_SYMBOL_ID_TO_NAME: Record<number, string> = {
   0: "H1", 1: "H2", 2: "H3", 3: "H4", 4: "H5",
   5: "L1", 6: "L2", 7: "L3", 8: "L4",
-  9: "WILD", 10: "SCATTER", 11: "?",
+  9: "WILD", 10: "SCATTER", 11: "BONUS",
 };
+
+/** Plafond free spins en mode local pour éviter sessions infinies (retriggers). */
+const MAX_FREE_SPINS_LOCAL = 100;
+
+/** Plafond RTP affiché en mode local (session mock). */
+const MAX_RTP_DISPLAY_PCT = 200;
+
+/** Valeurs possibles pour les symboles BONUS (affichage X2, X5, X10). */
+const BONUS_MULTIPLIER_VALUES = [2, 5, 10];
+
+function getNextBonusMultipliers(board: string[][], bonusSymName: string): Record<string, number> {
+  const next: Record<string, number> = {};
+  if (!bonusSymName) return next;
+  for (let col = 0; col < board.length; col++) {
+    for (let row = 0; row < (board[col]?.length ?? 0); row++) {
+      if (board[col][row] === bonusSymName) {
+        next[`${col},${row}`] = BONUS_MULTIPLIER_VALUES[Math.floor(Math.random() * BONUS_MULTIPLIER_VALUES.length)];
+      }
+    }
+  }
+  return next;
+}
+
+/** Somme des valeurs multiplicateur des cellules BONUS sur le board (type Gates of Olympus). */
+function sumBonusOnBoard(board: string[][], bonusSymName: string, bonusMultipliers: Record<string, number>): number {
+  let sum = 0;
+  if (!bonusSymName) return sum;
+  for (let col = 0; col < board.length; col++) {
+    for (let row = 0; row < (board[col]?.length ?? 0); row++) {
+      if (board[col][row] === bonusSymName) {
+        sum += bonusMultipliers[`${col},${row}`] ?? 2;
+      }
+    }
+  }
+  return sum;
+}
+
+/** Palier de gain pour les animations (aligné WIN_ANIMATION_OPTIONS) */
+function getWinTierFromMultiplier(mult: number): WinTier {
+  if (mult >= 20) return "megawin";
+  if (mult >= 5) return "bigwin";
+  return "win";
+}
+
+/** Durée en ms pour la célébration (assetsConfig.winAnimations[tier].duration ou fallback animation.winAnimationDuration) */
+function getCelebrationDurationMs(config: { assetsConfig?: { winAnimations?: { tier: WinTier; duration: number }[] }; animation?: { winAnimationDuration: number } }, tier: WinTier): number {
+  const winAnimations = (config as any).assetsConfig?.winAnimations;
+  const winAnim = winAnimations?.find((a: { tier: WinTier }) => a.tier === tier);
+  if (winAnim?.duration != null) return winAnim.duration * 1000;
+  return (config as any).animation?.winAnimationDuration ?? 2000;
+}
+
+/** builtIn + intensity pour l’overlay (depuis assetsConfig.winAnimations[tier]) */
+function getCelebrationWinConfig(config: { assetsConfig?: { winAnimations?: { tier: WinTier; builtIn: string; intensity: "low" | "medium" | "overthetop" }[] } }, tier: WinTier): { builtIn: string; intensity: "low" | "medium" | "overthetop" } {
+  const winAnimations = (config as any).assetsConfig?.winAnimations;
+  const winAnim = winAnimations?.find((a: { tier: WinTier }) => a.tier === tier);
+  return {
+    builtIn: winAnim?.builtIn ?? "coins_fall",
+    intensity: winAnim?.intensity ?? "low",
+  };
+}
+
+/** Vidéo décorative avec vitesse de lecture réglable (sans chroma key) */
+function DecorativeVideo({ src, className, playbackRate = 1 }: { src: string; className?: string; playbackRate?: number }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const rate = Math.max(0.25, Math.min(2, playbackRate));
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v) v.playbackRate = rate;
+  }, [rate]);
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      autoPlay
+      loop
+      muted
+      playsInline
+      className={className}
+      onLoadedData={(e) => { (e.target as HTMLVideoElement).playbackRate = rate; }}
+    />
+  );
+}
+
+/** Vidéo avec fond noir ou blanc rendu transparent (chroma key par luminance) — pour MP4 sans canal alpha */
+function VideoWithChromaKey({
+  src,
+  className,
+  threshold = 120,
+  keyBlack = true,
+  keyWhite = false,
+  playbackRate = 1,
+}: {
+  src: string;
+  className?: string;
+  threshold?: number;
+  keyBlack?: boolean;
+  keyWhite?: boolean;
+  playbackRate?: number;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number>(0);
+  const t = Math.max(1, Math.min(200, threshold));
+  const whiteThreshold = 255 - t;
+  const rate = Math.max(0.25, Math.min(2, playbackRate));
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v) v.playbackRate = rate;
+  }, [rate]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const draw = () => {
+      if (video.paused || video.ended) {
+        rafRef.current = requestAnimationFrame(draw);
+        return;
+      }
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      if (w > 0 && h > 0) {
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+        }
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(video, 0, 0);
+        try {
+          const imgData = ctx.getImageData(0, 0, w, h);
+          const data = imgData.data;
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const lum = (r + g + b) / 3;
+            const keyedOut = (keyBlack && lum < t) || (keyWhite && lum > whiteThreshold);
+            if (keyedOut) {
+              data[i + 3] = 0;
+            } else {
+              data[i + 3] = 255;
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+        } catch {
+          // CORS: canvas tainted
+        }
+      }
+      rafRef.current = requestAnimationFrame(draw);
+    };
+    const onLoadedData = () => {
+      video.playbackRate = rate;
+      draw();
+    };
+    video.addEventListener("loadeddata", onLoadedData);
+    if (video.readyState >= 2) onLoadedData();
+    return () => {
+      video.removeEventListener("loadeddata", onLoadedData);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [src, t, whiteThreshold, keyBlack, keyWhite, rate]);
+
+  return (
+    <div className={cn("relative w-full h-full flex items-center justify-center bg-transparent", className)}>
+      <video
+        ref={videoRef}
+        src={src}
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute w-0 h-0 opacity-0 pointer-events-none"
+      />
+      <canvas
+        ref={canvasRef}
+        className="w-full h-auto max-h-full object-contain bg-transparent"
+        style={{ maxHeight: "100%", background: "transparent" }}
+      />
+    </div>
+  );
+}
 
 function symbolIdBoardToString(board: number[][]): string[][] {
   return board.map((reel) =>
@@ -65,7 +254,7 @@ export interface SlotPreviewProps {
 }
 
 export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps) {
-  const { config, updateConfig } = useGameConfig();
+  const { config, updateConfig, effectPreviewRequest } = useGameConfig();
   const { config: controlsConfig } = useSlotControls();
   const rgs = useRgsClient();
   const [now, setNow] = useState(() => new Date());
@@ -89,6 +278,7 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
   const [autoSpinCount, setAutoSpinCount] = useState(0);
   const autoSpinRef = useRef(autoSpinCount);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationTierOverride, setCelebrationTierOverride] = useState<WinTier | null>(null);
   const [showParticles, setShowParticles] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [masterMuted, setMasterMuted] = useState(false);
@@ -102,17 +292,55 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
   const [explodingPositions, setExplodingPositions] = useState<Set<string>>(new Set());
   const [cascadingPositions, setCascadingPositions] = useState<Set<string>>(new Set());
   const [tumbleTotalWin, setTumbleTotalWin] = useState(0);
+  /** Multiplicateur par cellule BONUS (clé "col,row") pour affichage X2/X5/X10 */
+  const [bonusCellMultipliers, setBonusCellMultipliers] = useState<Record<string, number>>({});
   const gridAreaRef = useRef<HTMLDivElement | null>(null);
   const [cellPx, setCellPx] = useState(64);
   const skin = config.skin ?? DEFAULT_SKIN;
   const [showBonusConfirm, setShowBonusConfirm] = useState(false);
   const [bootLoading, setBootLoading] = useState(() => locked);
+  const [showMultiplierReveal, setShowMultiplierReveal] = useState(false);
+  const multiplierRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const multiplierRevealTriggerRef = useRef<() => void>(() => {});
+  /** Dernier gameId pour RGS (évite envoi d’un ancien template si spin juste après changement). */
+  const rgsGameIdRef = useRef<string | undefined>(undefined);
 
   const ve = config.visualEffects;
   const au = config.audio;
   const an = config.animation;
   const paySymbols = config.symbols.filter((s) => s.type !== "scatter");
   const allSymbols = config.symbols; // includes scatter for board generation
+
+  /** Particules : si l'utilisateur a choisi "Aucun" (visualEffects), on n'affiche jamais de particules ; sinon assetsConfig ou fallback visualEffects */
+  const particleEffectFromAssets = useMemo(() => {
+    if (ve.particleEffect === "none") return { effect: "none" as ParticleEffect, intensity: 0 };
+    const ac = (config as any).assetsConfig?.particleEffects;
+    if (!ac?.length) return { effect: ve.particleEffect, intensity: ve.particleIntensity };
+    const first = ac.find((e: { enabled: boolean }) => e.enabled);
+    if (!first) return { effect: ve.particleEffect, intensity: ve.particleIntensity };
+    const idToEffect: Record<string, ParticleEffect> = {
+      sparkles: "sparkles",
+      stars: "stars",
+      confetti: "confetti",
+      flames: "fire",
+      gems: "stars",
+      snow: "bubbles",
+    };
+    const effect = idToEffect[first.id] ?? "sparkles";
+    const intensity = (first as { density?: number }).density ?? 50;
+    return { effect, intensity };
+  }, [config, ve.particleEffect, ve.particleIntensity]);
+
+  /** URLs par défaut pour les symboles (quand aucun asset n'est assigné) — évite d'afficher "L1", "WILD" en texte au lancement */
+  const defaultSymbolUrls = useMemo(() => {
+    const candidates = CURATED_ASSETS.filter((a) => a.category === "symbols" && a.type !== "lottie");
+    if (candidates.length === 0) return {};
+    const out: Record<string, string> = {};
+    config.symbols.forEach((sym, i) => {
+      out[sym.id] = candidates[i % candidates.length].url;
+    });
+    return out;
+  }, [config.symbols]);
 
   /** En mode RGS : balance depuis session (6 décimales implicites) */
   const displayBalance = mode === "rgs" ? (rgs.session?.balance ?? 0) / 1_000_000 : balance;
@@ -172,7 +400,9 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
       const cw = (w - gap * (config.numReels - 1)) / config.numReels;
       const ch = (h - gap * (config.numRows - 1)) / config.numRows;
       // On prend le plus petit des deux pour garantir que la grille rentre en largeur ET en hauteur.
-      const next = Math.floor(clamp(Math.min(cw, ch) - safetyPx, minCell, maxCell));
+      const base = Math.floor(clamp(Math.min(cw, ch) - safetyPx, minCell, maxCell));
+      const scale = (skin.grid.gridScalePercent ?? 100) / 100;
+      const next = Math.max(1, Math.floor(base * scale));
       if (Number.isFinite(next) && next > 0) setCellPx(next);
     };
 
@@ -188,6 +418,7 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
     skin.grid.safetyPx,
     skin.grid.minCellPx,
     skin.grid.maxCellPx,
+    skin.grid.gridScalePercent,
   ]);
 
   // RGS: authenticate on mount so session/balance are set
@@ -196,6 +427,11 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
       rgs.authenticate();
     }
   }, [mode, rgs.session, rgs.authenticate]);
+
+  // RGS: garder le gameId à jour pour l’envoi au serveur (aligné sur la grille affichée)
+  useEffect(() => {
+    rgsGameIdRef.current = isOfficialTemplate(config.gameId) ? config.gameId : undefined;
+  }, [config.gameId]);
 
   // Audio setup
   useEffect(() => {
@@ -243,12 +479,14 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
       }
       newBoard.push(reel);
     }
+    const bonusSym = config.symbols.find((s) => s.type === "bonus");
+    setBonusCellMultipliers(getNextBonusMultipliers(newBoard, bonusSym?.name ?? ""));
     setBoard(newBoard);
     setSpinningReels(new Array(config.numReels).fill(false));
-  }, [mode, config.numReels, config.numRows, paySymbols.length]);
+  }, [mode, config.numReels, config.numRows, config.symbols, paySymbols.length]);
 
   const evaluateWins = useCallback(
-    (resultBoard: string[][]): SpinResult => {
+    (resultBoard: string[][], bonusMultipliers?: Record<string, number>, applyBonusMultiplier = true): SpinResult => {
       const foundWins: WinData[] = [];
       let totalMultiplier = 0;
 
@@ -270,12 +508,12 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
         if (scatterCount >= 3) {
           const spinsAwarded = config.freeSpins.scatterAwards[scatterCount] || 10;
           setScatterTriggered(true);
-          setShowCelebration(true);
-          setShowParticles(true);
+          if (ve.celebrationStyle !== "none") setShowCelebration(true);
+          if (particleEffectFromAssets.effect !== "none") setShowParticles(true);
           setTimeout(() => {
             setShowCelebration(false);
             setShowParticles(false);
-            setFreeSpinsRemaining((prev) => prev + spinsAwarded);
+            setFreeSpinsRemaining((prev) => Math.min(prev + spinsAwarded, MAX_FREE_SPINS_LOCAL));
             if (!inFreeSpins) setFreeSpinsTotalWin(0);
             setInFreeSpins(true);
           }, 2000);
@@ -356,7 +594,7 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
               const cluster = findCluster(resultBoard, col, row, symDef.name, wildSym);
               if (cluster.length >= 3) {
                 cluster.forEach((pos) => visited.add(`${pos[0]},${pos[1]}`));
-                const mult = symDef.paytable[Math.min(cluster.length, 5)] || 0;
+                const mult = symDef.paytable[cluster.length] ?? symDef.paytable[Math.min(cluster.length, 5)] ?? 0;
                 if (mult > 0) {
                   foundWins.push({ positions: cluster, symbol: symDef.name, multiplier: mult });
                   totalMultiplier += mult;
@@ -386,11 +624,27 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
             totalMultiplier += symDef.paytable[positions.length];
           }
         });
+        // Symbole BONUS = multiplicateur (Gates of Olympus) : appliqué en cascade via runTumbleCascade si applyBonusMultiplier, sinon géré par le multiplicateur de cascade persistant
+        if (applyBonusMultiplier) {
+          const bonusSym = config.symbols.find((s) => s.type === "bonus");
+          if (bonusSym) {
+            let bonusSum = 0;
+            resultBoard.forEach((reel, col) => {
+              reel.forEach((sym, row) => {
+                if (sym === bonusSym.name) {
+                  const mult = bonusMultipliers?.[`${col},${row}`] ?? 2;
+                  bonusSum += mult;
+                }
+              });
+            });
+            if (bonusSum > 0) totalMultiplier *= 1 + bonusSum;
+          }
+        }
       }
 
       return { board: resultBoard, wins: foundWins, totalWin: totalMultiplier };
     },
-    [config]
+    [config, ve.celebrationStyle, particleEffectFromAssets.effect]
   );
 
   // Helper to generate a random board with scatter probability
@@ -469,8 +723,15 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
     return newBoard;
   }, [config, paySymbols]);
 
-  // Run a tumble cascade sequence
-  const runTumbleCascade = useCallback((currentBoard: string[][], currentWins: WinData[], accumulatedWin: number, cascadeNum: number) => {
+  // Run a tumble cascade sequence (Gates of Olympus: multiplicateur de cascade cumulé = symboles BONUS collectés à chaque tumble)
+  const runTumbleCascade = useCallback((
+    currentBoard: string[][],
+    currentWins: WinData[],
+    accumulatedWin: number,
+    cascadeNum: number,
+    cascadeMultiplier: number,
+    currentBoardBonusMultipliers: Record<string, number>
+  ) => {
     if (currentWins.length === 0 || !config.tumbleEnabled) {
       // No more wins or tumble disabled — end cascade
       setTumbling(false);
@@ -508,7 +769,7 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
     
     // Phase 1: Show explosion animation
     setExplodingPositions(winPosSet);
-    setShowParticles(true);
+    if (particleEffectFromAssets.effect !== "none") setShowParticles(true);
     
     const explodeDuration = turboMode ? 300 : 600;
     
@@ -528,54 +789,68 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
         }
       }
       setCascadingPositions(cascadeSet);
+      const bonusSym = config.symbols.find((s) => s.type === "bonus");
+      const nextBonus = getNextBonusMultipliers(newBoard, bonusSym?.name ?? "");
+      setBonusCellMultipliers(nextBonus);
       setBoard(newBoard);
       setTumbleCount(cascadeNum);
-      
+
+      // Gates of Olympus : les symboles BONUS sur le board qu'on vient d'exploser s'ajoutent au multiplicateur de cascade
+      const bonusSum = sumBonusOnBoard(currentBoard, bonusSym?.name ?? "", currentBoardBonusMultipliers);
+      const newCascadeMult = cascadeMultiplier + bonusSum;
+
       const dropDuration = turboMode ? 200 : 400;
-      
+
       setTimeout(() => {
         setCascadingPositions(new Set());
-        
-        // Phase 3: Re-evaluate wins
-        const result = evaluateWins(newBoard);
+
+        // Phase 3: Re-évaluer les gains (sans réappliquer les BONUS ici, ils sont dans newCascadeMult)
+        const result = evaluateWins(newBoard, nextBonus, false);
         setWins(result.wins);
-        
+
         if (result.totalWin > 0) {
-          let multiplier = 1;
+          let freeSpinMult = 1;
           if (inFreeSpins && config.freeSpins.multiplier !== "none") {
-            if (config.freeSpins.multiplier === "2x") multiplier = 2;
-            else if (config.freeSpins.multiplier === "3x") multiplier = 3;
-            else if (config.freeSpins.multiplier === "5x") multiplier = 5;
-            else if (config.freeSpins.multiplier === "random") multiplier = [2, 3, 5][Math.floor(Math.random() * 3)];
+            if (config.freeSpins.multiplier === "2x") freeSpinMult = 2;
+            else if (config.freeSpins.multiplier === "3x") freeSpinMult = 3;
+            else if (config.freeSpins.multiplier === "5x") freeSpinMult = 5;
+            else if (config.freeSpins.multiplier === "random") freeSpinMult = [2, 3, 5][Math.floor(Math.random() * 3)];
           }
-          const winAmount = result.totalWin * bet * multiplier;
+          const winAmount = result.totalWin * bet * newCascadeMult * freeSpinMult;
           const newAccum = accumulatedWin + winAmount;
           setTumbleTotalWin(newAccum);
           setTotalWin(result.totalWin);
           setBalance((b) => b + winAmount);
           setStats((s) => ({ ...s, won: s.won + winAmount }));
           if (inFreeSpins) setFreeSpinsTotalWin((prev) => prev + winAmount);
-          
-          // Celebration on big tumble chains
-          if (cascadeNum >= 2 || result.totalWin >= ve.celebrationThreshold) {
+
+          // Celebration on big tumble chains (duration from assetsConfig.winAnimations[tier]) — seulement si un effet célébration est activé
+          if ((cascadeNum >= 2 || result.totalWin >= ve.celebrationThreshold) && ve.celebrationStyle !== "none") {
+            setCelebrationTierOverride(null);
             setShowCelebration(true);
-            setTimeout(() => setShowCelebration(false), an.winAnimationDuration);
+            const tier = getWinTierFromMultiplier(result.totalWin);
+            const durationMs = getCelebrationDurationMs(config, tier);
+            setTimeout(() => {
+              setShowCelebration(false);
+              setCelebrationTierOverride(null);
+            }, durationMs);
           }
-          
-          // Continue cascade
+          if (result.totalWin > 0 && inFreeSpins && config.freeSpins.multiplier !== "none") multiplierRevealTriggerRef.current();
+
+          // Continue cascade (multiplicateur persistant pour le prochain tumble)
           const nextDelay = turboMode ? 400 : 800;
           setTimeout(() => {
-            runTumbleCascade(newBoard, result.wins, newAccum, cascadeNum + 1);
+            runTumbleCascade(newBoard, result.wins, newAccum, cascadeNum + 1, newCascadeMult, nextBonus);
           }, nextDelay);
         } else {
           setWins([]);
           setTotalWin(0);
           // End cascade
-          runTumbleCascade(newBoard, [], accumulatedWin, cascadeNum);
+          runTumbleCascade(newBoard, [], accumulatedWin, cascadeNum, newCascadeMult, nextBonus);
         }
       }, dropDuration);
     }, explodeDuration);
-  }, [config, tumbleBoard, evaluateWins, bet, ve, an, turboMode, inFreeSpins]);
+  }, [config, tumbleBoard, evaluateWins, bet, ve, an, turboMode, inFreeSpins, particleEffectFromAssets.effect]);
 
   const spin = useCallback(async () => {
     if (spinning || tumbling) return;
@@ -589,22 +864,33 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
       setWins([]);
       setTotalWin(0);
       const betAmount = Math.round(bet * 1_000_000);
-      const res = await rgs.play(betAmount);
+      const gameId = rgsGameIdRef.current;
+      const res = await rgs.play(betAmount, gameId);
       setSpinning(false);
       setSpinningReels(new Array(config.numReels).fill(false));
       if (!res?.events?.length) return;
+      let hadMultiplierWin = false;
       for (const e of res.events as RgsRoundEvent[]) {
         if (e.type === "reveal" && e.board) {
           setBoard(symbolIdBoardToString(e.board));
+          if (e.bonusCellMultipliers && typeof e.bonusCellMultipliers === "object") {
+            setBonusCellMultipliers(e.bonusCellMultipliers as Record<string, number>);
+          }
         }
         if (e.type === "winInfo" && e.wins) {
           setWins(rgsWinsToWinData(e.wins));
+          if (e.wins.some((w: RgsWinEvent) => (w.multiplier ?? 0) > 1)) hadMultiplierWin = true;
         }
         if (e.type === "setWin" || e.type === "finalWin") {
           if (e.amount != null) setTotalWin(e.amount / 1_000_000);
         }
+        if (e.type === "freeSpinsTrigger") {
+          setScatterTriggered(true);
+          setFreeSpinsRemaining(e.freeSpinsAwarded ?? 0);
+        }
       }
       if (res.payoutMultiplier != null) setTotalWin(res.payoutMultiplier * bet);
+      if (hadMultiplierWin) multiplierRevealTriggerRef.current();
 
       // Auto-spin continuation (mode RGS)
       if (autoSpinRef.current > 0) {
@@ -671,23 +957,34 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
       setStats((s) => ({ ...s, won: s.won + winAmount }));
       if (inFreeSpins) setFreeSpinsTotalWin((prev) => prev + winAmount);
 
-      // Trigger effects for initial win
+      // Trigger effects for initial win (duration from assetsConfig.winAnimations[tier]) — seulement si les effets sont activés (pas "none")
       if (result.totalWin >= ve.celebrationThreshold) {
-        setShowCelebration(true);
-        setShowParticles(true);
-        setTimeout(() => {
-          setShowCelebration(false);
-          setShowParticles(false);
-        }, an.winAnimationDuration);
+        if (ve.celebrationStyle !== "none") {
+          setCelebrationTierOverride(null);
+          setShowCelebration(true);
+          const tier = getWinTierFromMultiplier(result.totalWin);
+          const durationMs = getCelebrationDurationMs(config, tier);
+          setTimeout(() => {
+            setShowCelebration(false);
+            setCelebrationTierOverride(null);
+          }, durationMs);
+        }
+        if (particleEffectFromAssets.effect !== "none") {
+          setShowParticles(true);
+          const tier = getWinTierFromMultiplier(result.totalWin);
+          const durationMs = getCelebrationDurationMs(config, tier);
+          setTimeout(() => setShowParticles(false), durationMs);
+        }
       }
+      if (result.totalWin > 0 && inFreeSpins && config.freeSpins.multiplier !== "none") triggerMultiplierReveal();
 
-      // If tumble enabled and there are wins, start cascade
+      // If tumble enabled and there are wins, start cascade (Gates of Olympus : multiplicateur initial 1, nextBonus = symboles sur le board initial)
       if (config.tumbleEnabled && result.wins.length > 0) {
         setTumbling(true);
         setTumbleTotalWin(winAmount);
         const cascadeDelay = turboMode ? 600 : 1200;
         setTimeout(() => {
-          runTumbleCascade(newBoard, result.wins, winAmount, 1);
+          runTumbleCascade(newBoard, result.wins, winAmount, 1, 1, nextBonus);
         }, cascadeDelay);
       } else {
         setSpinning(false);
@@ -729,19 +1026,23 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
     const scatterCount = 3;
     const spinsAwarded = config.freeSpins.scatterAwards[scatterCount] || 10;
     const forcedBoard = generateBoard(scatterCount);
+    const bonusSym = config.symbols.find((s) => s.type === "bonus");
+    setBonusCellMultipliers(getNextBonusMultipliers(forcedBoard, bonusSym?.name ?? ""));
     setBoard(forcedBoard);
     setScatterTriggered(true);
-    setShowCelebration(true);
-    setShowParticles(true);
-    
+    setCelebrationTierOverride("freespins");
+    if (ve.celebrationStyle !== "none") setShowCelebration(true);
+    if (particleEffectFromAssets.effect !== "none") setShowParticles(true);
+    const durationMs = getCelebrationDurationMs(config, "freespins");
     setTimeout(() => {
       setShowCelebration(false);
       setShowParticles(false);
-      setFreeSpinsRemaining(spinsAwarded);
+      setCelebrationTierOverride(null);
+      setFreeSpinsRemaining(Math.min(spinsAwarded, MAX_FREE_SPINS_LOCAL));
       setFreeSpinsTotalWin(0);
       setInFreeSpins(true);
-    }, 2000);
-  }, [spinning, balance, bet, config.freeSpins, generateBoard]);
+    }, durationMs);
+  }, [spinning, balance, bet, config, config.freeSpins, generateBoard, ve.celebrationStyle, particleEffectFromAssets.effect]);
 
   const requestBuyBonus = useCallback(() => {
     if (spinning || !config.freeSpins.enabled) return;
@@ -786,7 +1087,9 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
     autoSpinRef.current = 0;
   }, []);
 
-  const rtp = stats.wagered > 0 ? ((stats.won / stats.wagered) * 100).toFixed(2) : "0.00";
+  const rtpValue = stats.wagered > 0 ? (stats.won / stats.wagered) * 100 : 0;
+  const rtp = (mode === "local" ? Math.min(rtpValue, MAX_RTP_DISPLAY_PCT) : rtpValue).toFixed(2);
+  const rtpLabel = mode === "local" ? "RTP (session mock)" : undefined;
 
   // Video playback speed
   useEffect(() => {
@@ -826,6 +1129,38 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
 
   const shouldUseMobileFrame = currentUxMode === "mobile";
 
+  /** Aperçu des effets déclenché depuis l'étape Effets (amateur) — respecte la config (none = rien afficher) */
+  useEffect(() => {
+    if (typeof effectPreviewRequest !== "number" || effectPreviewRequest <= 0) return;
+    const showCeleb = ve.celebrationStyle !== "none";
+    const showPart = particleEffectFromAssets.effect !== "none";
+    if (showCeleb) {
+      setCelebrationTierOverride("bigwin");
+      setShowCelebration(true);
+    }
+    if (showPart) setShowParticles(true);
+    const durationMs = 3500;
+    const t = setTimeout(() => {
+      setShowCelebration(false);
+      setShowParticles(false);
+      setCelebrationTierOverride(null);
+    }, durationMs);
+    return () => clearTimeout(t);
+  }, [effectPreviewRequest, ve.celebrationStyle, particleEffectFromAssets.effect]);
+
+  /** Déclenche la vidéo multiplicateur (ex. Zeus lance des éclairs) quand un gain tombe sur la grille */
+  const triggerMultiplierReveal = useCallback(() => {
+    const videoUrl = (config as any).assetsConfig?.multiplierRevealVideo;
+    if (!videoUrl) return;
+    if (multiplierRevealTimeoutRef.current) clearTimeout(multiplierRevealTimeoutRef.current);
+    setShowMultiplierReveal(true);
+    multiplierRevealTimeoutRef.current = setTimeout(() => {
+      setShowMultiplierReveal(false);
+      multiplierRevealTimeoutRef.current = null;
+    }, 5000);
+  }, [config]);
+  multiplierRevealTriggerRef.current = triggerMultiplierReveal;
+
   return (
     <aside 
       className={cn(
@@ -833,7 +1168,7 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
         shouldUseMobileFrame && "max-w-[480px] mx-auto aspect-[9/16] rounded-3xl border border-border shadow-2xl"
       )}
       style={!config.backgroundUrl && config.backgroundImage ? { 
-        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.8)), url(${config.backgroundImage})`, 
+        backgroundImage: `url(${config.backgroundImage})`, 
         backgroundSize: 'cover', 
         backgroundPosition: 'center' 
       } : {}}
@@ -888,7 +1223,6 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
           loop
           muted
           className="absolute inset-0 w-full h-full object-cover -z-10 cursor-pointer"
-          style={{ filter: 'brightness(0.5)' }}
           onClick={() => setEditingBackground(true)}
         />
       )}
@@ -896,7 +1230,7 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
         <div
           className="absolute inset-0 w-full h-full -z-10 cursor-pointer"
           style={{
-            backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.8)), url(${config.backgroundUrl})`,
+            backgroundImage: `url(${config.backgroundUrl})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
@@ -985,6 +1319,84 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
           shouldUseMobileFrame ? "justify-center" : "justify-start"
         )}
       >
+        {/* Personnages décoratifs gauche et/ou droite : image ou vidéo breathe, position réglable (masqués sur mobile, écran trop petit) */}
+        {!shouldUseMobileFrame && ["Left", "Right"].map((side) => {
+          const ac = (config as any).assetsConfig;
+          const key = side === "Left" ? "decorativeOverlayLeft" : "decorativeOverlayRight";
+          const dec = ac?.[key] ?? (side === "Right" && ac?.decorativeOverlay ? { ...ac.decorativeOverlay, positionX: ac.decorativeOverlay.positionX ?? 85, positionY: ac.decorativeOverlay.positionY ?? 50 } : null);
+          const url = dec?.url ?? (side === "Right" && ac?.multiplierRevealOverlay ? ac.multiplierRevealOverlay : null);
+          if (!url) return null;
+          const type = dec?.type ?? "image";
+          const x = dec?.positionX ?? (side === "Left" ? 15 : 85);
+          const y = dec?.positionY ?? 50;
+          const scale = (dec?.scale ?? 100) / 100;
+          const chromaKeyBlack = !!dec?.chromaKeyBlack;
+          const chromaKeyWhite = !!dec?.chromaKeyWhite;
+          const useChromaKey = chromaKeyBlack || chromaKeyWhite;
+          const lightEffect = dec?.lightEffect ?? "shadow_glow";
+          const dropShadows: string[] = [];
+          if (lightEffect === "shadow" || lightEffect === "shadow_glow") dropShadows.push("0 10px 24px rgba(0,0,0,0.45)", "0 4px 12px rgba(0,0,0,0.25)");
+          if (lightEffect === "glow" || lightEffect === "shadow_glow") dropShadows.push("0 0 20px rgba(255,220,180,0.5)", "0 0 40px rgba(255,200,140,0.25)");
+          const filter = dropShadows.length ? `drop-shadow(${dropShadows.join(") drop-shadow(")})` : "none";
+          return (
+            <div
+              key={key}
+              className="absolute z-[5] w-28 sm:w-36 max-h-[70%] flex items-center justify-center pointer-events-none"
+              style={{
+                left: `${x}%`,
+                top: `${y}%`,
+                transform: `translate(-50%, -50%) scale(${scale})`,
+                maxWidth: "min(200px, 28vw)",
+                filter: filter !== "none" ? filter : undefined,
+              }}
+            >
+              {type === "video" ? (
+                useChromaKey ? (
+                  <VideoWithChromaKey
+                    src={url}
+                    className="w-full max-h-full"
+                    threshold={dec?.chromaKeyThreshold ?? 55}
+                    keyBlack={chromaKeyBlack}
+                    keyWhite={chromaKeyWhite}
+                    playbackRate={dec?.videoPlaybackRate ?? 1}
+                  />
+                ) : (
+                  <DecorativeVideo
+                    src={url}
+                    className="w-full h-auto max-h-full object-contain"
+                    playbackRate={dec?.videoPlaybackRate ?? 1}
+                  />
+                )
+              ) : (
+                <img
+                  src={url}
+                  alt=""
+                  className="w-full h-auto max-h-full object-contain"
+                />
+              )}
+            </div>
+          );
+        })}
+        {/* Vidéo multiplicateur : jouée une fois quand un gain tombe (ex. Zeus lance des éclairs) */}
+        {(config as any).assetsConfig?.multiplierRevealVideo && showMultiplierReveal && (
+          <div className="absolute inset-0 z-[35] flex items-center justify-center bg-black/20 pointer-events-none">
+            <video
+              key={(config as any).assetsConfig.multiplierRevealVideo}
+              src={(config as any).assetsConfig.multiplierRevealVideo}
+              autoPlay
+              muted
+              playsInline
+              className="max-w-full max-h-full object-contain animate-in fade-in duration-300"
+              onEnded={() => {
+                setShowMultiplierReveal(false);
+                if (multiplierRevealTimeoutRef.current) {
+                  clearTimeout(multiplierRevealTimeoutRef.current);
+                  multiplierRevealTimeoutRef.current = null;
+                }
+              }}
+            />
+          </div>
+        )}
         {/* Zone bannière FREE SPINS / SCATTER, en overlay sous la grille */}
         <div className="pointer-events-none absolute top-full left-0 right-0 mt-2 flex items-center justify-center z-30">
           {inFreeSpins && (
@@ -1020,8 +1432,8 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
 
         <ParticleSystem
           active={showParticles}
-          effect={ve.particleEffect}
-          intensity={ve.particleIntensity}
+          effect={particleEffectFromAssets.effect}
+          intensity={particleEffectFromAssets.intensity}
           originX={50}
           originY={50}
         />
@@ -1031,6 +1443,17 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
           style={ve.celebrationStyle}
           bet={bet}
         />
+        {showCelebration && (() => {
+          const tier = celebrationTierOverride ?? getWinTierFromMultiplier(totalWin);
+          const { builtIn, intensity } = getCelebrationWinConfig(config, tier);
+          return (
+            <WinAnimationOverlay
+              active
+              builtIn={builtIn}
+              intensity={intensity}
+            />
+          );
+        })()}
 
         {/* Résumé Free Spins en overlay (ne déplace pas la grille) */}
         {showFreeSpinsSummary && (
@@ -1064,10 +1487,9 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
             </div>
           </div>
         )}
-        {/* Cadre de grille fixe (taille calculée à partir de cellPx / numReels / numRows)
-            avec un petit padding interne pour éviter que les cases collent au bord bleu. */}
+        {/* Cadre de grille : sur desktop décalage via skin.grid.gridOffsetDesktopX/Y (marges en % du conteneur) ; sur mobile position fixe. (z-10 pour passer devant les personnages décoratifs) */}
         <div
-          className={`relative rounded-xl shadow-2xl transition-all p-2 ${
+          className={`relative z-10 rounded-xl shadow-2xl transition-all p-2 ${
             ve.gridBorderStyle === "glow" ? "border-2 glow-gold" :
             ve.gridBorderStyle === "neon" ? "border-4 border-gold" :
             ve.gridBorderStyle === "gradient" ? "border-4 border-transparent bg-gradient-to-br from-gold/50 to-cyan/50" :
@@ -1076,6 +1498,12 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
           style={{
             backgroundColor: config.reelColor || 'hsl(220 18% 9%)',
             borderColor: ve.gridBorderStyle !== "none" ? ve.gridBorderColor : undefined,
+            ...(currentUxMode === "desktop"
+              ? {
+                  marginLeft: `${skin.grid.gridOffsetDesktopX ?? 0}%`,
+                  marginTop: `${skin.grid.gridOffsetDesktopY ?? 0}%`,
+                }
+              : {}),
           }}
         >
           <div
@@ -1131,16 +1559,27 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
                       opacity: isExploding ? 0 : 1,
                     }}
                   >
-                    {/* Check for assigned asset from assets config */}
+                    {/* Check for assigned asset from assets config, sinon image par défaut de la bibliothèque */}
                     {(() => {
+                      const posKey = `${colIdx},${rowIdx}`;
+                      if (symDef?.type === "bonus") {
+                        const mult = bonusCellMultipliers[posKey] ?? 2;
+                        return (
+                          <span className="font-black text-lg sm:text-xl drop-shadow-md" style={{ color: symDef?.color ?? "#F1C40F" }}>
+                            X{mult}
+                          </span>
+                        );
+                      }
                       const assetsConfig = (config as any).assetsConfig;
                       const assignedUrl = assetsConfig?.symbolAssets?.[symDef?.id || ""];
+                      const fallbackUrl = symDef?.id ? defaultSymbolUrls[symDef.id] : null;
+                      const displayUrl = assignedUrl || fallbackUrl;
                       const pad = Math.max(0, Math.min(20, skin.symbols.imagePaddingPct ?? 0));
                       const inner = pad > 0 ? `${100 - pad}%` : "100%";
-                      if (assignedUrl) {
+                      if (displayUrl) {
                         return (
                           <img
-                            src={assignedUrl}
+                            src={displayUrl}
                             alt={sym}
                             className="rounded"
                             style={{ width: inner, height: inner, objectFit: skin.symbols.imageFit ?? "contain" }}
@@ -1252,16 +1691,17 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
             shouldUseMobileFrame ? "mt-4" : "mt-1 mb-3"
           )}
         >
-          {totalWin > 0 && (
+          {(tumbling ? tumbleTotalWin > 0 : totalWin > 0) && (
             <div className="text-center animate-scale-in">
               <p
                 className="text-2xl font-black drop-shadow-md"
                 style={{ color: controlsConfig.autoSpin.color }}
               >
-                GAIN: {totalWin.toFixed(1)}x
+                {tumbling ? "GAIN CASCADE: " : "GAIN: "}
+                {tumbling ? (tumbleTotalWin / bet).toFixed(1) : totalWin.toFixed(1)}x
               </p>
               <p className="text-sm font-medium text-foreground">
-                ${(totalWin * bet).toFixed(2)}
+                ${(tumbling ? tumbleTotalWin : totalWin * bet).toFixed(2)}
               </p>
             </div>
           )}
@@ -1309,6 +1749,8 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
             buyBonus={requestBuyBonus}
             stats={stats}
             rtp={rtp}
+            rtpLabel={rtpLabel}
+            rtpWarning={mode === "local" && !locked ? "RTP affiché = session uniquement. Pour le RTP théorique du jeu, connectez un backend Stake Engine (URL : ?rgs_url=...&sessionID=...)." : undefined}
             showPaylines={showPaylines}
             setShowPaylines={setShowPaylines}
             config={config}
@@ -1334,6 +1776,8 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
             buyBonus={requestBuyBonus}
             stats={stats}
             rtp={rtp}
+            rtpLabel={rtpLabel}
+            rtpWarning={mode === "local" && !locked ? "RTP affiché = session uniquement. Pour le RTP théorique du jeu, connectez un backend Stake Engine (URL : ?rgs_url=...&sessionID=...)." : undefined}
             showPaylines={showPaylines}
             setShowPaylines={setShowPaylines}
             config={config}

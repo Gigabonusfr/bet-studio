@@ -8,6 +8,10 @@ interface GameConfigContextType {
   currentStep: number;
   setCurrentStep: (step: number) => void;
   resetConfig: () => void;
+  /** Déclenche un aperçu des effets (célébration + particules) sur la slot. Non persisté. */
+  triggerEffectPreview: () => void;
+  /** Incrémenté à chaque appel à triggerEffectPreview (pour que le preview réagisse). */
+  effectPreviewRequest: number;
 }
 
 const GameConfigContext = createContext<GameConfigContextType | null>(null);
@@ -119,6 +123,11 @@ export function GameConfigProvider({ children }: { children: React.ReactNode }) 
   const [saved] = useState(loadFromStorage);
   const [config, setConfig] = useState<GameConfig>(saved.config);
   const [currentStep, setCurrentStep] = useState(saved.step);
+  const [effectPreviewRequest, setEffectPreviewRequest] = useState(0);
+
+  const triggerEffectPreview = useCallback(() => {
+    setEffectPreviewRequest((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     try {
@@ -141,7 +150,7 @@ export function GameConfigProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   return (
-    <GameConfigContext.Provider value={{ config, updateConfig, currentStep, setCurrentStep, resetConfig }}>
+    <GameConfigContext.Provider value={{ config, updateConfig, currentStep, setCurrentStep, resetConfig, triggerEffectPreview, effectPreviewRequest }}>
       {children}
     </GameConfigContext.Provider>
   );

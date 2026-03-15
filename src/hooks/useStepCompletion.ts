@@ -1,6 +1,7 @@
 import { useGameConfig } from "@/context/GameConfigContext";
 import { useSlotControls } from "@/context/SlotControlsContext";
-import { GAME_TEMPLATES, EFFECT_PRESETS } from "@/data/game-templates";
+import { isOfficialTemplate } from "@/data/official-stake-templates";
+import { EFFECT_PRESETS } from "@/data/game-templates";
 import { THEMES } from "@/types/slot-controls";
 import { DEFAULT_ASSETS_CONFIG } from "@/types/asset-types";
 
@@ -12,13 +13,8 @@ export interface StepCheckItem {
 export function useStepCompletion() {
   const { config } = useGameConfig();
 
-  // Step 1: Template
-  const templateSelected = GAME_TEMPLATES.some(
-    (t) =>
-      t.config.winMechanic === config.winMechanic &&
-      t.config.numReels === config.numReels &&
-      t.config.numRows === config.numRows
-  );
+  // Step 1: Template (uniquement templates officiels, math SDK)
+  const templateSelected = isOfficialTemplate(config.gameId);
 
   // Step 2: Identity
   const hasName = config.gameName.trim().length > 0 && config.gameName !== "Cluster Example";

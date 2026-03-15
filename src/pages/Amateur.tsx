@@ -78,7 +78,7 @@ function AmateurBuilderInner() {
           "hidden lg:block",
           mobileView === "preview" && "!block"
         )}>
-          <SlotPreview mode="local" />
+          <SlotPreview mode="rgs" />
         </div>
 
         {/* Form */}

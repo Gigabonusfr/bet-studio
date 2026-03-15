@@ -9,7 +9,7 @@ interface RgsContextType {
   session: RgsSession | null;
   setClient: (client: RgsClientInstance | null) => void;
   authenticate: () => Promise<RgsSession | null>;
-  play: (bet: number) => Promise<RgsPlayResponse | null>;
+  play: (bet: number, gameId?: string) => Promise<RgsPlayResponse | null>;
   endRound: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -27,8 +27,9 @@ function getBootstrap() {
 
 function createDefaultClient(): RgsClientInstance {
   const { rgsUrl, sessionID, demoMode } = getBootstrap();
-  if (!demoMode && rgsUrl && sessionID) {
-    return new RgsClient({ baseUrl: rgsUrl, sessionId: sessionID });
+  // Dès que rgs_url est fourni (hors demo), on utilise le vrai RGS ; sessionID optionnel (créé par le serveur à l’auth).
+  if (!demoMode && rgsUrl) {
+    return new RgsClient({ baseUrl: rgsUrl, sessionId: sessionID || undefined });
   }
   return new MockRgsClient();
 }
@@ -45,10 +46,10 @@ export function RgsProvider({ children }: { children: ReactNode }) {
   }, [client]);
 
   const play = useCallback(
-    async (bet: number): Promise<RgsPlayResponse | null> => {
+    async (bet: number, gameId?: string): Promise<RgsPlayResponse | null> => {
       const c = client ?? defaultClient;
       try {
-        const res = await c.play(bet);
+        const res = await c.play(bet, gameId);
         if (res.balance != null) setSession((prev) => (prev ? { ...prev, balance: res.balance! } : null));
         return res;
       } catch (e) {

@@ -43,6 +43,12 @@ export interface SkinGridConfig {
   /** Taille min/max de cellule en px (responsive clamp) */
   minCellPx: number;
   maxCellPx: number;
+  /** Décalage horizontal de la grille en % (desktop uniquement, -50 à 50, 0 = centré) */
+  gridOffsetDesktopX?: number;
+  /** Décalage vertical de la grille en % (desktop uniquement, -50 à 50, 0 = position par défaut) */
+  gridOffsetDesktopY?: number;
+  /** Taille de la grille en % (70–130). 100 = taille auto, &lt;100 = plus petite, &gt;100 = plus grande. */
+  gridScalePercent?: number;
 }
 
 export interface SkinSymbolsConfig {
@@ -272,6 +278,9 @@ export const DEFAULT_SKIN: SkinConfigFront = {
     safetyPx: 1,
     minCellPx: 44,
     maxCellPx: 140,
+    gridOffsetDesktopX: 0,
+    gridOffsetDesktopY: 0,
+    gridScalePercent: 100,
   },
   symbols: {
     imageFit: "contain",

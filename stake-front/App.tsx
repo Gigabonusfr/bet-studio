@@ -126,10 +126,11 @@ export function App() {
 
   const pageStyle = useMemo(() => {
     if (!embed?.bodyBackgroundUrl) return undefined;
+    if (embed.backgroundType === "video") return undefined;
     return {
-      background: `linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(0,0,0,0.8)), url(${embed.bodyBackgroundUrl}) center/cover no-repeat`,
+      background: `url(${embed.bodyBackgroundUrl}) center/cover no-repeat`,
     } as const;
-  }, [embed?.bodyBackgroundUrl]);
+  }, [embed?.bodyBackgroundUrl, embed?.backgroundType]);
 
   const wrapperStyle = useMemo(() => {
     const borderColor = embed?.gridBorderColor || "#ffd700";
@@ -146,15 +147,37 @@ export function App() {
 
   const canRender = !!embed;
 
-  return (
-    <div className="page" style={pageStyle}>
-      <h1 className="title">{embed?.gameName || "Slot"}</h1>
-      <p className="subtitle">
-        {demoMode ? "Mode démo — ?demo=1" : "Stake Engine — charge via ?sessionID=...&rgs_url=..."}
-        {gameType ? ` • ${gameType}` : ""}
-      </p>
+  const isVideoBg = embed?.backgroundType === "video" && embed?.bodyBackgroundUrl;
 
-      <div className="wrapper" style={wrapperStyle}>
+  return (
+    <div className="page" style={{ ...pageStyle, position: isVideoBg ? "relative" : undefined }}>
+      {isVideoBg && (
+        <video
+          className="page-bg-video"
+          src={embed!.bodyBackgroundUrl!}
+          autoPlay
+          muted
+          loop
+          playsInline
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            zIndex: 0,
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      <div style={{ position: "relative", zIndex: 2 }}>
+        <h1 className="title">{embed?.gameName || "Slot"}</h1>
+        <p className="subtitle">
+          {demoMode ? "Mode démo — ?demo=1" : "Stake Engine — charge via ?sessionID=...&rgs_url=..."}
+          {gameType ? ` • ${gameType}` : ""}
+        </p>
+
+        <div className="wrapper" style={wrapperStyle}>
         <div className="grid" style={gridStyle as any}>
           {canRender &&
             Array.from({ length: embed!.numReels }).flatMap((_, c) =>
@@ -172,7 +195,7 @@ export function App() {
         </div>
       </div>
 
-      <div className="hud">
+        <div className="hud">
         <div className="pill">
           <span className="label">BALANCE</span>
           <span className="value">{formatAmount(balance)}</span>
@@ -193,6 +216,7 @@ export function App() {
         <div className="pill">
           <span className="label">WIN</span>
           <span className="value">{formatAmount(win)}</span>
+        </div>
         </div>
       </div>
 

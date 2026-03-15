@@ -1,17 +1,17 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useGameConfig } from "@/context/GameConfigContext";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Search, Upload, Shuffle, X, Image, Sparkles, Palette, Eye, Play, ExternalLink, Plus, MousePointer, Zap } from "lucide-react";
 import { CURATED_ASSETS, ASSET_CATEGORIES, WIN_ANIMATION_OPTIONS } from "@/data/curated-assets";
-import type { AssetItem, WinTier, AssetsConfig, ParticleEffectConfig } from "@/types/asset-types";
-import { DEFAULT_ASSETS_CONFIG, DEFAULT_PARTICLE_EFFECTS } from "@/types/asset-types";
+import type { AssetItem, WinTier, AssetsConfig, ParticleEffectConfig, DecorativeOverlayConfig } from "@/types/asset-types";
+import { DEFAULT_ASSETS_CONFIG, DEFAULT_PARTICLE_EFFECTS, DEFAULT_DECORATIVE_OVERLAY_LEFT, DEFAULT_DECORATIVE_OVERLAY_RIGHT } from "@/types/asset-types";
 import { cn } from "@/lib/utils";
 import { HelpBanner } from "@/components/builder/HelpBanner";
 import Lottie from "lottie-react";
@@ -227,119 +227,12 @@ function AssetPreviewModal({
   );
 }
 
-// ─── WIN ANIMATION PREVIEW ──────────────────────────────────────────────
-function WinAnimationPreview({ animId, intensity }: { animId: string; intensity: "low" | "medium" | "overthetop" }) {
-  const count = intensity === "low" ? 5 : intensity === "medium" ? 10 : 20;
-  const animations: Record<string, React.ReactNode> = {
-    coins_fall: (
-      <div className="relative h-20 w-full overflow-hidden">
-        {[...Array(count)].map((_, i) => (
-          <span key={i} className="absolute text-xl animate-bounce"
-            style={{ left: `${Math.random() * 90}%`, animationDelay: `${Math.random() * 0.5}s`, animationDuration: `${0.5 + Math.random() * 0.5}s` }}>🪙</span>
-        ))}
-      </div>
-    ),
-    golden_flash: (
-      <div className={cn("h-20 w-full rounded-lg animate-pulse",
-        intensity === "overthetop" ? "bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-400" :
-        intensity === "medium" ? "bg-gradient-to-r from-yellow-500/70 to-amber-400/70" :
-        "bg-gradient-to-r from-yellow-600/50 to-amber-500/50"
-      )} />
-    ),
-    stars_burst: (
-      <div className="relative h-20 w-full flex items-center justify-center">
-        {[...Array(count)].map((_, i) => (
-          <span key={i} className="absolute text-2xl animate-ping"
-            style={{ left: `${20 + Math.random() * 60}%`, top: `${20 + Math.random() * 60}%`, animationDelay: `${Math.random() * 0.3}s` }}>⭐</span>
-        ))}
-      </div>
-    ),
-    win_text: (
-      <div className="h-20 w-full flex items-center justify-center">
-        <span className={cn("font-black animate-pulse",
-          intensity === "overthetop" ? "text-4xl text-yellow-400 drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]" :
-          intensity === "medium" ? "text-3xl text-yellow-500" : "text-2xl text-yellow-600"
-        )}>WIN!</span>
-      </div>
-    ),
-    coin_explosion: (
-      <div className="relative h-20 w-full overflow-hidden">
-        {[...Array(count)].map((_, i) => (
-          <span key={i} className="absolute text-lg"
-            style={{ left: "50%", top: "50%", transform: `translate(-50%,-50%) translate(${(Math.random()-0.5)*150}px,${(Math.random()-0.5)*80}px)`, animation: "ping 0.8s ease-out infinite", animationDelay: `${Math.random()*0.3}s` }}>🪙</span>
-        ))}
-      </div>
-    ),
-    confetti_color: (
-      <div className="relative h-20 w-full overflow-hidden">
-        {["🎊","🎉","✨","💫","🌟"].flatMap((e,ei) => [...Array(Math.ceil(count/5))].map((_,i) => (
-          <span key={`${ei}-${i}`} className="absolute text-xl animate-bounce"
-            style={{ left: `${Math.random()*90}%`, top: `${Math.random()*80}%`, animationDelay: `${Math.random()*0.5}s` }}>{e}</span>
-        )))}
-      </div>
-    ),
-    light_rays: (
-      <div className="h-20 w-full flex items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-radial from-yellow-300/50 to-transparent animate-pulse" />
-        <span className="text-3xl z-10">🌟</span>
-      </div>
-    ),
-    counter_frenzy: (
-      <div className="h-20 w-full flex items-center justify-center">
-        <span className={cn("font-mono font-black tabular-nums",
-          intensity === "overthetop" ? "text-4xl text-green-400 animate-pulse" :
-          intensity === "medium" ? "text-3xl text-green-500" : "text-2xl text-green-600"
-        )}>+$9,999</span>
-      </div>
-    ),
-    fireworks: (
-      <div className="relative h-20 w-full overflow-hidden">
-        {["🎆","🎇","✨"].flatMap((e,ei) => [...Array(Math.ceil(count/3))].map((_,i) => (
-          <span key={`${ei}-${i}`} className="absolute text-2xl animate-ping"
-            style={{ left: `${10+Math.random()*80}%`, top: `${10+Math.random()*70}%`, animationDelay: `${Math.random()*0.8}s` }}>{e}</span>
-        )))}
-      </div>
-    ),
-    gem_rain: (
-      <div className="relative h-20 w-full overflow-hidden">
-        {["💎","💠","🔷","🔶"].flatMap((e,ei) => [...Array(Math.ceil(count/4))].map((_,i) => (
-          <span key={`${ei}-${i}`} className="absolute text-xl animate-bounce"
-            style={{ left: `${Math.random()*90}%`, animationDelay: `${Math.random()*0.5}s` }}>{e}</span>
-        )))}
-      </div>
-    ),
-    epic_flash: (
-      <div className="h-20 w-full bg-gradient-to-r from-purple-500 via-pink-500 to-yellow-500 animate-pulse rounded-lg flex items-center justify-center">
-        <span className="text-4xl">🎉</span>
-      </div>
-    ),
-    banner_animated: (
-      <div className="h-20 w-full flex items-center justify-center">
-        <div className={cn("px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 animate-pulse", intensity === "overthetop" && "scale-110")}>
-          <span className="text-white font-black text-lg">FREE SPINS!</span>
-        </div>
-      </div>
-    ),
-    scatter_pulse: (
-      <div className="h-20 w-full flex items-center justify-center gap-2">
-        {[...Array(3)].map((_, i) => (
-          <span key={i} className="text-3xl animate-pulse" style={{ animationDelay: `${i*0.2}s` }}>💫</span>
-        ))}
-      </div>
-    ),
-    scene_transition: (
-      <div className="h-20 w-full relative overflow-hidden rounded-lg">
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-900 via-purple-900 to-indigo-900 animate-pulse" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-white font-bold animate-bounce">🎬 TRANSITION</span>
-        </div>
-      </div>
-    ),
-  };
+import { WinAnimationContent } from "@/components/builder/win-animation-variants";
 
+function WinAnimationPreview({ animId, intensity }: { animId: string; intensity: "low" | "medium" | "overthetop" }) {
   return (
     <div className="rounded-lg border border-border bg-card/50 overflow-hidden">
-      {animations[animId] || <div className="h-20 w-full flex items-center justify-center text-muted-foreground text-sm">Aperçu non disponible</div>}
+      <WinAnimationContent animId={animId} intensity={intensity} fullScreen={false} />
     </div>
   );
 }
@@ -377,7 +270,7 @@ export function Step6Assets() {
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/30">
           <MousePointer className="h-3 w-3 text-primary animate-pulse" />
           <span className="text-xs text-primary font-medium">
-            Slot : <strong>{selectedSlot === "__background__" ? "Background" : selectedSlot.toUpperCase()}</strong>
+            Slot : <strong>{selectedSlot === "__background__" ? "Background" : selectedSlot === "__decorative_overlay_left__" ? "Personnage gauche" : selectedSlot === "__decorative_overlay_right__" ? "Personnage droite" : selectedSlot === "__multiplier_video__" ? "Vidéo multiplicateur" : selectedSlot.toUpperCase()}</strong>
           </span>
           <span className="text-[10px] text-muted-foreground">— Cliquez sur un asset</span>
           <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto" onClick={() => setSelectedSlot(null)}>
@@ -386,47 +279,54 @@ export function Step6Assets() {
         </div>
       )}
 
-      <Tabs defaultValue="library" className="w-full">
-        <TabsList className="w-full grid grid-cols-4 h-10">
-          <TabsTrigger value="library" className="text-xs gap-1"><Image className="h-3.5 w-3.5" />Symboles</TabsTrigger>
-          <TabsTrigger value="animations" className="text-xs gap-1"><Sparkles className="h-3.5 w-3.5" />Animations</TabsTrigger>
-          <TabsTrigger value="particles" className="text-xs gap-1"><Zap className="h-3.5 w-3.5" />Particules</TabsTrigger>
-          <TabsTrigger value="upload" className="text-xs gap-1"><Upload className="h-3.5 w-3.5" />Upload</TabsTrigger>
-        </TabsList>
-
-        {/* ── TAB 1: SYMBOLES & BACKGROUND ── */}
-        <TabsContent value="library">
-          <AssetLibraryTab
-            assetsConfig={assetsConfig}
-            updateAssets={updateAssets}
-            symbols={config.symbols}
-            onPreview={setPreviewAsset}
-            onUpdateConfig={updateConfig}
-            selectedSlot={selectedSlot}
-            onSelectSlot={setSelectedSlot}
-          />
-        </TabsContent>
-
-        {/* ── TAB 2: WIN ANIMATIONS ── */}
-        <TabsContent value="animations">
-          <WinAnimationsTab assetsConfig={assetsConfig} updateAssets={updateAssets} />
-        </TabsContent>
-
-        {/* ── TAB 3: PARTICULES ── */}
-        <TabsContent value="particles">
-          <ParticleEffectsTab assetsConfig={assetsConfig} updateAssets={updateAssets} />
-        </TabsContent>
-
-        {/* ── TAB 4: UPLOAD ── */}
-        <TabsContent value="upload">
+      {/* ─── 1. IMAGES (Symboles + fond + upload) ─── */}
+      <section className="rounded-xl border-2 border-border bg-card/50 p-5 space-y-5">
+        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <Image className="h-5 w-5" /> 1. Images
+        </h3>
+        <p className="text-sm text-muted-foreground -mt-3">
+          Assignez des images aux symboles et au fond. Bibliothèque intégrée et imports depuis votre PC.
+        </p>
+        <AssetLibraryTab
+          assetsConfig={assetsConfig}
+          updateAssets={updateAssets}
+          symbols={config.symbols}
+          onPreview={setPreviewAsset}
+          onUpdateConfig={updateConfig}
+          selectedSlot={selectedSlot}
+          onSelectSlot={setSelectedSlot}
+        />
+        <div className="border-t border-border pt-5">
           <CustomUploadTab
             assetsConfig={assetsConfig}
             updateAssets={updateAssets}
             fileInputRef={fileInputRef}
             onPreview={setPreviewAsset}
           />
-        </TabsContent>
-      </Tabs>
+        </div>
+      </section>
+
+      {/* ─── 2. ANIMATIONS DE GAIN ─── */}
+      <section className="rounded-xl border-2 border-border bg-card/50 p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <Sparkles className="h-5 w-5" /> 2. Animations de gain
+        </h3>
+        <p className="text-sm text-muted-foreground -mt-3">
+          Configurez l’animation, la durée et l’intensité pour chaque palier (Win, Big Win, Mega Win, Free Spins).
+        </p>
+        <WinAnimationsTab assetsConfig={assetsConfig} updateAssets={updateAssets} />
+      </section>
+
+      {/* ─── 3. PARTICULES ─── */}
+      <section className="rounded-xl border-2 border-border bg-card/50 p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <Zap className="h-5 w-5" /> 3. Particules
+        </h3>
+        <p className="text-sm text-muted-foreground -mt-3">
+          Activez et personnalisez les effets de particules (étincelles, confettis, etc.) affichés en jeu.
+        </p>
+        <ParticleEffectsTab assetsConfig={assetsConfig} updateAssets={updateAssets} />
+      </section>
 
       <AssetPreviewModal asset={previewAsset} open={!!previewAsset} onClose={() => setPreviewAsset(null)} />
     </div>
@@ -509,6 +409,37 @@ function AssetLibraryTab({
                     if (asset.category === "backgrounds" || asset.type !== "lottie") {
                       updateAssets({ backgroundAsset: asset.url });
                       onUpdateConfig({ backgroundUrl: asset.url, backgroundType: "image" });
+                      onSelectSlot(null);
+                    }
+                  } else if (selectedSlot === "__decorative_overlay_left__") {
+                    if (asset.type !== "lottie") {
+                      const isVideo = asset.type === "mp4" || asset.type === "webm" || /\.(mp4|webm)$/i.test(asset.url);
+                      updateAssets({
+                        decorativeOverlayLeft: {
+                          ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT),
+                          url: asset.url,
+                          type: isVideo ? "video" : "image",
+                          ...(isVideo ? { chromaKeyBlack: true, chromaKeyThreshold: 55 } : {}),
+                        },
+                      });
+                      onSelectSlot(null);
+                    }
+                  } else if (selectedSlot === "__decorative_overlay_right__") {
+                    if (asset.type !== "lottie") {
+                      const isVideo = asset.type === "mp4" || asset.type === "webm" || /\.(mp4|webm)$/i.test(asset.url);
+                      updateAssets({
+                        decorativeOverlayRight: {
+                          ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT),
+                          url: asset.url,
+                          type: isVideo ? "video" : "image",
+                          ...(isVideo ? { chromaKeyBlack: true, chromaKeyThreshold: 55 } : {}),
+                        },
+                      });
+                      onSelectSlot(null);
+                    }
+                  } else if (selectedSlot === "__multiplier_video__") {
+                    if (asset.type === "mp4" || asset.type === "webm" || /\.(mp4|webm)$/i.test(asset.url)) {
+                      updateAssets({ multiplierRevealVideo: asset.url });
                       onSelectSlot(null);
                     }
                   } else {
@@ -604,6 +535,317 @@ function AssetLibraryTab({
             ) : (
               <p className="text-xs text-muted-foreground italic w-full text-center py-2">
                 {selectedSlot === "__background__" ? "🎯 Cliquez sur un asset" : draggedAsset ? "↓ Déposer ici" : "Cliquer pour sélectionner"}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Personnage à GAUCHE : PNG ou MP4 breathe, position réglable */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">⬅️ Personnage à gauche</h3>
+          <p className="text-[10px] text-muted-foreground">Image ou vidéo (breathe). Optionnel — tu peux n’en mettre qu’à droite, qu’à gauche, ou les deux.</p>
+          <div
+            onClick={() => onSelectSlot(selectedSlot === "__decorative_overlay_left__" ? null : "__decorative_overlay_left__")}
+            onDragOver={e => e.preventDefault()}
+            onDrop={() => {
+              if (draggedAsset && draggedAsset.type !== "lottie") {
+                const isVideo = draggedAsset.type === "mp4" || draggedAsset.type === "webm" || /\.(mp4|webm)$/i.test(draggedAsset.url);
+                updateAssets({
+                  decorativeOverlayLeft: {
+                    ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT),
+                    url: draggedAsset.url,
+                    type: isVideo ? "video" : "image",
+                    ...(isVideo ? { chromaKeyBlack: true, chromaKeyThreshold: 55 } : {}),
+                  },
+                });
+                setDraggedAsset(null);
+              }
+            }}
+            className={cn(
+              "flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer",
+              selectedSlot === "__decorative_overlay_left__" ? "border-primary bg-primary/10 ring-2 ring-primary/30" :
+              draggedAsset ? "border-dashed border-primary/50 bg-primary/5" : "border-border bg-card/50 hover:border-primary/30"
+            )}
+          >
+            {assetsConfig.decorativeOverlayLeft?.url ? (
+              <>
+                {assetsConfig.decorativeOverlayLeft.type === "video" ? (
+                  <span className="w-16 h-10 rounded flex items-center justify-center bg-muted/50 text-lg">🎬</span>
+                ) : (
+                  <img src={assetsConfig.decorativeOverlayLeft.url} alt="Gauche" className="w-16 h-10 rounded object-contain bg-muted/50"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                )}
+                <span className="text-xs text-foreground flex-1 truncate">{assetsConfig.decorativeOverlayLeft.type === "video" ? "Vidéo" : "Image"}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                  onClick={e => { e.stopPropagation(); updateAssets({ decorativeOverlayLeft: { ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT), url: null } }); }}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground italic w-full text-center py-2">
+                {selectedSlot === "__decorative_overlay_left__" ? "🎯 Cliquez sur une image ou vidéo" : draggedAsset ? "↓ Déposer ici" : "Cliquer pour sélectionner"}
+              </p>
+            )}
+          </div>
+          {assetsConfig.decorativeOverlayLeft?.url && (
+            <div className="space-y-2 pt-1">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Position X (%)</Label>
+                  <Slider
+                    min={0}
+                    max={100}
+                    value={[assetsConfig.decorativeOverlayLeft?.positionX ?? DEFAULT_DECORATIVE_OVERLAY_LEFT.positionX]}
+                    onValueChange={([v]) => updateAssets({ decorativeOverlayLeft: { ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT), positionX: v } })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Position Y (%)</Label>
+                  <Slider
+                    min={0}
+                    max={100}
+                    value={[assetsConfig.decorativeOverlayLeft?.positionY ?? DEFAULT_DECORATIVE_OVERLAY_LEFT.positionY]}
+                    onValueChange={([v]) => updateAssets({ decorativeOverlayLeft: { ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT), positionY: v } })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Taille (%)</Label>
+                <Slider
+                  min={50}
+                  max={800}
+                  value={[assetsConfig.decorativeOverlayLeft?.scale ?? DEFAULT_DECORATIVE_OVERLAY_LEFT.scale]}
+                  onValueChange={([v]) => updateAssets({ decorativeOverlayLeft: { ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT), scale: v } })}
+                />
+              </div>
+              {assetsConfig.decorativeOverlayLeft?.type === "video" && (
+                <div className="space-y-2 pt-1 border-t border-border/50">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-[10px] text-muted-foreground">Fond noir transparent</Label>
+                    <Switch
+                      checked={!!assetsConfig.decorativeOverlayLeft?.chromaKeyBlack}
+                      onCheckedChange={(v) => updateAssets({ decorativeOverlayLeft: { ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT), chromaKeyBlack: v } })}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-[10px] text-muted-foreground">Fond blanc transparent</Label>
+                    <Switch
+                      checked={!!assetsConfig.decorativeOverlayLeft?.chromaKeyWhite}
+                      onCheckedChange={(v) => updateAssets({ decorativeOverlayLeft: { ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT), chromaKeyWhite: v } })}
+                    />
+                  </div>
+                  {(!!assetsConfig.decorativeOverlayLeft?.chromaKeyBlack || !!assetsConfig.decorativeOverlayLeft?.chromaKeyWhite) && (
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">Seuil (bas = personnage opaque, haut = fond bien enlevé)</Label>
+                      <Slider
+                        min={5}
+                        max={120}
+                        value={[assetsConfig.decorativeOverlayLeft?.chromaKeyThreshold ?? 55]}
+                        onValueChange={([v]) => updateAssets({ decorativeOverlayLeft: { ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT), chromaKeyThreshold: v } })}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Vitesse vidéo ({(assetsConfig.decorativeOverlayLeft?.videoPlaybackRate ?? 1).toFixed(2)}×)</Label>
+                    <Slider
+                      min={25}
+                      max={200}
+                      value={[Math.round((assetsConfig.decorativeOverlayLeft?.videoPlaybackRate ?? 1) * 100)]}
+                      onValueChange={([v]) => updateAssets({ decorativeOverlayLeft: { ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT), videoPlaybackRate: v / 100 } })}
+                    />
+                  </div>
+                </div>
+              )}
+              {assetsConfig.decorativeOverlayLeft?.url && (
+                <div className="space-y-1 pt-1 border-t border-border/50">
+                  <Label className="text-[10px] text-muted-foreground">Effet de lumière (incrustation)</Label>
+                  <Select
+                    value={assetsConfig.decorativeOverlayLeft?.lightEffect ?? "shadow_glow"}
+                    onValueChange={(v: "none" | "shadow" | "glow" | "shadow_glow") => updateAssets({ decorativeOverlayLeft: { ...(assetsConfig.decorativeOverlayLeft ?? DEFAULT_DECORATIVE_OVERLAY_LEFT), lightEffect: v } })}
+                  >
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" className="text-xs">Aucun</SelectItem>
+                      <SelectItem value="shadow" className="text-xs">Ombre portée</SelectItem>
+                      <SelectItem value="glow" className="text-xs">Lueur</SelectItem>
+                      <SelectItem value="shadow_glow" className="text-xs">Ombre + lueur</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Personnage à DROITE : PNG ou MP4 breathe, position réglable */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">➡️ Personnage à droite</h3>
+          <p className="text-[10px] text-muted-foreground">Image ou vidéo (breathe). Optionnel.</p>
+          <div
+            onClick={() => onSelectSlot(selectedSlot === "__decorative_overlay_right__" ? null : "__decorative_overlay_right__")}
+            onDragOver={e => e.preventDefault()}
+            onDrop={() => {
+              if (draggedAsset && draggedAsset.type !== "lottie") {
+                const isVideo = draggedAsset.type === "mp4" || draggedAsset.type === "webm" || /\.(mp4|webm)$/i.test(draggedAsset.url);
+                updateAssets({
+                  decorativeOverlayRight: {
+                    ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT),
+                    url: draggedAsset.url,
+                    type: isVideo ? "video" : "image",
+                    ...(isVideo ? { chromaKeyBlack: true, chromaKeyThreshold: 55 } : {}),
+                  },
+                });
+                setDraggedAsset(null);
+              }
+            }}
+            className={cn(
+              "flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer",
+              selectedSlot === "__decorative_overlay_right__" ? "border-primary bg-primary/10 ring-2 ring-primary/30" :
+              draggedAsset ? "border-dashed border-primary/50 bg-primary/5" : "border-border bg-card/50 hover:border-primary/30"
+            )}
+          >
+            {assetsConfig.decorativeOverlayRight?.url ? (
+              <>
+                {assetsConfig.decorativeOverlayRight.type === "video" ? (
+                  <span className="w-16 h-10 rounded flex items-center justify-center bg-muted/50 text-lg">🎬</span>
+                ) : (
+                  <img src={assetsConfig.decorativeOverlayRight.url} alt="Droite" className="w-16 h-10 rounded object-contain bg-muted/50"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                )}
+                <span className="text-xs text-foreground flex-1 truncate">{assetsConfig.decorativeOverlayRight.type === "video" ? "Vidéo" : "Image"}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                  onClick={e => { e.stopPropagation(); updateAssets({ decorativeOverlayRight: { ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT), url: null } }); }}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground italic w-full text-center py-2">
+                {selectedSlot === "__decorative_overlay_right__" ? "🎯 Cliquez sur une image ou vidéo" : draggedAsset ? "↓ Déposer ici" : "Cliquer pour sélectionner"}
+              </p>
+            )}
+          </div>
+          {assetsConfig.decorativeOverlayRight?.url && (
+            <div className="space-y-2 pt-1">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Position X (%)</Label>
+                  <Slider
+                    min={0}
+                    max={100}
+                    value={[assetsConfig.decorativeOverlayRight?.positionX ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT.positionX]}
+                    onValueChange={([v]) => updateAssets({ decorativeOverlayRight: { ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT), positionX: v } })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Position Y (%)</Label>
+                  <Slider
+                    min={0}
+                    max={100}
+                    value={[assetsConfig.decorativeOverlayRight?.positionY ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT.positionY]}
+                    onValueChange={([v]) => updateAssets({ decorativeOverlayRight: { ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT), positionY: v } })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Taille (%)</Label>
+                <Slider
+                  min={50}
+                  max={800}
+                  value={[assetsConfig.decorativeOverlayRight?.scale ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT.scale]}
+                  onValueChange={([v]) => updateAssets({ decorativeOverlayRight: { ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT), scale: v } })}
+                />
+              </div>
+              {assetsConfig.decorativeOverlayRight?.type === "video" && (
+                <div className="space-y-2 pt-1 border-t border-border/50">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-[10px] text-muted-foreground">Fond noir transparent</Label>
+                    <Switch
+                      checked={!!assetsConfig.decorativeOverlayRight?.chromaKeyBlack}
+                      onCheckedChange={(v) => updateAssets({ decorativeOverlayRight: { ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT), chromaKeyBlack: v } })}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-[10px] text-muted-foreground">Fond blanc transparent</Label>
+                    <Switch
+                      checked={!!assetsConfig.decorativeOverlayRight?.chromaKeyWhite}
+                      onCheckedChange={(v) => updateAssets({ decorativeOverlayRight: { ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT), chromaKeyWhite: v } })}
+                    />
+                  </div>
+                  {(!!assetsConfig.decorativeOverlayRight?.chromaKeyBlack || !!assetsConfig.decorativeOverlayRight?.chromaKeyWhite) && (
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">Seuil (bas = personnage opaque, haut = fond bien enlevé)</Label>
+                      <Slider
+                        min={5}
+                        max={120}
+                        value={[assetsConfig.decorativeOverlayRight?.chromaKeyThreshold ?? 55]}
+                        onValueChange={([v]) => updateAssets({ decorativeOverlayRight: { ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT), chromaKeyThreshold: v } })}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Vitesse vidéo ({(assetsConfig.decorativeOverlayRight?.videoPlaybackRate ?? 1).toFixed(2)}×)</Label>
+                    <Slider
+                      min={25}
+                      max={200}
+                      value={[Math.round((assetsConfig.decorativeOverlayRight?.videoPlaybackRate ?? 1) * 100)]}
+                      onValueChange={([v]) => updateAssets({ decorativeOverlayRight: { ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT), videoPlaybackRate: v / 100 } })}
+                    />
+                  </div>
+                </div>
+              )}
+              {assetsConfig.decorativeOverlayRight?.url && (
+                <div className="space-y-1 pt-1 border-t border-border/50">
+                  <Label className="text-[10px] text-muted-foreground">Effet de lumière (incrustation)</Label>
+                  <Select
+                    value={assetsConfig.decorativeOverlayRight?.lightEffect ?? "shadow_glow"}
+                    onValueChange={(v: "none" | "shadow" | "glow" | "shadow_glow") => updateAssets({ decorativeOverlayRight: { ...(assetsConfig.decorativeOverlayRight ?? DEFAULT_DECORATIVE_OVERLAY_RIGHT), lightEffect: v } })}
+                  >
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" className="text-xs">Aucun</SelectItem>
+                      <SelectItem value="shadow" className="text-xs">Ombre portée</SelectItem>
+                      <SelectItem value="glow" className="text-xs">Lueur</SelectItem>
+                      <SelectItem value="shadow_glow" className="text-xs">Ombre + lueur</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Vidéo multiplicateur (MP4) : jouée quand un gain tombe sur la grille (ex. Zeus lance des éclairs) */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">⚡ Vidéo multiplicateur (MP4)</h3>
+          <p className="text-[10px] text-muted-foreground">Vidéo jouée une fois quand un multiplicateur / gain tombe (ex. Gates of Olympus – éclairs).</p>
+          <div
+            onClick={() => onSelectSlot(selectedSlot === "__multiplier_video__" ? null : "__multiplier_video__")}
+            onDragOver={e => e.preventDefault()}
+            onDrop={() => {
+              const isVideo = draggedAsset && (draggedAsset.type === "mp4" || draggedAsset.type === "webm" || /\.(mp4|webm)$/i.test(draggedAsset.url));
+              if (isVideo) {
+                updateAssets({ multiplierRevealVideo: draggedAsset!.url });
+                setDraggedAsset(null);
+              }
+            }}
+            className={cn(
+              "flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer",
+              selectedSlot === "__multiplier_video__" ? "border-primary bg-primary/10 ring-2 ring-primary/30" :
+              draggedAsset && (draggedAsset.type === "mp4" || draggedAsset.type === "webm" || /\.(mp4|webm)$/i.test(draggedAsset.url)) ? "border-dashed border-primary/50 bg-primary/5" : "border-border bg-card/50 hover:border-primary/30"
+            )}
+          >
+            {assetsConfig.multiplierRevealVideo ? (
+              <>
+                <span className="w-16 h-10 rounded flex items-center justify-center bg-muted/50 text-lg">🎬</span>
+                <span className="text-xs text-foreground flex-1 truncate">Vidéo assignée</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                  onClick={e => { e.stopPropagation(); updateAssets({ multiplierRevealVideo: null }); }}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground italic w-full text-center py-2">
+                {selectedSlot === "__multiplier_video__" ? "🎯 Cliquez sur une vidéo MP4" : draggedAsset && (draggedAsset.type === "mp4" || draggedAsset.type === "webm" || /\.(mp4|webm)$/i.test(draggedAsset.url)) ? "↓ Déposer ici" : "Cliquer (MP4 uniquement)"}
               </p>
             )}
           </div>
@@ -855,27 +1097,34 @@ function CustomUploadTab({
   onPreview: (asset: AssetItem) => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
-  const ACCEPTED = ".png,.jpg,.jpeg,.gif,.svg,.webp,.json";
-  const MAX_SIZE = 2 * 1024 * 1024;
+  const ACCEPTED = ".png,.jpg,.jpeg,.gif,.svg,.webp,.json,.mp4,.webm";
+  const MAX_SIZE_IMAGE = 2 * 1024 * 1024;   // 2 MB pour images / Lottie
+  const MAX_SIZE_VIDEO = 50 * 1024 * 1024;  // 50 MB pour vidéos MP4/WebM
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
     Array.from(files).forEach(file => {
-      if (file.size > MAX_SIZE) { alert(`${file.name} dépasse 2MB`); return; }
+      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      const isVideo = ext === "mp4" || ext === "webm";
+      const maxSize = isVideo ? MAX_SIZE_VIDEO : MAX_SIZE_IMAGE;
+      if (file.size > maxSize) {
+        alert(`${file.name} dépasse ${isVideo ? "50" : "2"}MB`);
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
-        const ext = file.name.split(".").pop()?.toLowerCase() || "png";
         const isLottie = ext === "json";
+        const type = isLottie ? "lottie" : (ext === "mp4" ? "mp4" : ext === "webm" ? "webm" : (ext as any));
         const newAsset: AssetItem = {
           id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           name: file.name.replace(/\.[^/.]+$/, ""),
-          category: "symbols",
+          category: isVideo ? "backgrounds" : "symbols",
           source: "custom",
           license: "FREE",
-          type: isLottie ? "lottie" : (ext as any),
+          type,
           url: dataUrl,
-          thumbnailUrl: isLottie ? "" : dataUrl,
+          thumbnailUrl: isLottie || isVideo ? "" : dataUrl,
           tags: ["custom", "uploaded"],
         };
         updateAssets({ customAssets: [...assetsConfig.customAssets, newAsset] });
@@ -893,7 +1142,7 @@ function CustomUploadTab({
       <div>
         <h3 className="text-sm font-semibold text-foreground">📤 Upload Custom</h3>
         <p className="text-xs text-muted-foreground mt-1">
-          Importez vos assets (PNG, JPG, GIF, SVG, WEBP, JSON Lottie). Max 2MB.
+          Importez vos assets : images (PNG, JPG, GIF, SVG, WEBP), Lottie (JSON), vidéos (MP4, WebM). Images/Lottie max 2MB, vidéos max 50MB.
         </p>
       </div>
 
@@ -909,7 +1158,7 @@ function CustomUploadTab({
       >
         <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
         <p className="text-sm text-foreground font-medium">Glissez vos fichiers ici ou cliquez</p>
-        <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF, SVG, WEBP, JSON — Max 2MB</p>
+        <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF, SVG, WEBP, JSON, MP4, WebM — Images 2MB, vidéos 50MB</p>
         <input ref={fileInputRef} type="file" accept={ACCEPTED} multiple className="hidden"
           onChange={e => handleFiles(e.target.files)} />
       </div>
@@ -922,8 +1171,8 @@ function CustomUploadTab({
               <div key={asset.id} className="relative group rounded-lg border border-border bg-card p-2">
                 <div className="aspect-square rounded bg-muted/50 flex items-center justify-center overflow-hidden mb-1 relative cursor-pointer"
                   onClick={() => onPreview(asset)}>
-                  {asset.type === "lottie" ? (
-                    <span className="text-xl">🎬</span>
+                  {asset.type === "lottie" || asset.type === "mp4" || asset.type === "webm" ? (
+                    <span className="text-xl">{asset.type === "lottie" ? "🎬" : "🎥"}</span>
                   ) : (
                     <img src={asset.url} alt={asset.name} className="w-full h-full object-contain" />
                   )}

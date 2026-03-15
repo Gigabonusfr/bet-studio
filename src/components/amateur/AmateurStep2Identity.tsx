@@ -2,7 +2,9 @@ import { useGameConfig } from "@/context/GameConfigContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import type { Theme } from "@/types/game-config";
+import { DEFAULT_SKIN } from "@/types/game-config";
 import { StepGuide } from "./StepGuide";
 import { useStepCompletion } from "@/hooks/useStepCompletion";
 
@@ -78,6 +80,119 @@ export function AmateurStep2Identity() {
           />
         </div>
         <p className="text-xs text-muted-foreground">Couleur de fond derrière les symboles.</p>
+      </div>
+
+      {/* Grid Border Color */}
+      <div className="space-y-2">
+        <Label className="text-foreground">Couleur du tour de la grille</Label>
+        <div className="flex gap-2">
+          <Input
+            type="color"
+            value={config.visualEffects?.gridBorderColor ?? "#FFD700"}
+            onChange={(e) =>
+              updateConfig({
+                visualEffects: { ...config.visualEffects, gridBorderColor: e.target.value },
+              } as any)
+            }
+            className="w-14 h-10 p-1 cursor-pointer bg-input border-border"
+          />
+          <Input
+            value={config.visualEffects?.gridBorderColor ?? "#FFD700"}
+            onChange={(e) =>
+              updateConfig({
+                visualEffects: { ...config.visualEffects, gridBorderColor: e.target.value },
+              } as any)
+            }
+            className="flex-1 bg-input border-border font-mono text-sm"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">Couleur du contour (bordure) autour de la grille de jeu.</p>
+      </div>
+
+      {/* Position de la grille (desktop uniquement) */}
+      <div className="space-y-3">
+        <Label className="text-foreground">Position de la grille (desktop)</Label>
+        <p className="text-xs text-muted-foreground">
+          Déplacez la grille sur l’écran. Sur mobile la grille reste à sa position par défaut.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Décalage horizontal (%)</Label>
+            <Slider
+              min={-50}
+              max={50}
+              step={1}
+              value={[(config.skin ?? DEFAULT_SKIN).grid?.gridOffsetDesktopX ?? 0]}
+              onValueChange={([v]) =>
+                updateConfig({
+                  skin: {
+                    ...DEFAULT_SKIN,
+                    ...config.skin,
+                    grid: {
+                      ...DEFAULT_SKIN.grid,
+                      ...config.skin?.grid,
+                      gridOffsetDesktopX: v,
+                    },
+                  },
+                } as any)
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Décalage vertical (%)</Label>
+            <Slider
+              min={-50}
+              max={50}
+              step={1}
+              value={[(config.skin ?? DEFAULT_SKIN).grid?.gridOffsetDesktopY ?? 0]}
+              onValueChange={([v]) =>
+                updateConfig({
+                  skin: {
+                    ...DEFAULT_SKIN,
+                    ...config.skin,
+                    grid: {
+                      ...DEFAULT_SKIN.grid,
+                      ...config.skin?.grid,
+                      gridOffsetDesktopY: v,
+                    },
+                  },
+                } as any)
+              }
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Taille de la grille */}
+      <div className="space-y-3">
+        <Label className="text-foreground">Taille de la grille</Label>
+        <p className="text-xs text-muted-foreground">
+          Réduire ou agrandir la grille par rapport à la taille automatique. 100 % = taille par défaut.
+        </p>
+        <div className="space-y-2">
+          <Slider
+            min={70}
+            max={130}
+            step={5}
+            value={[(config.skin ?? DEFAULT_SKIN).grid?.gridScalePercent ?? 100]}
+            onValueChange={([v]) =>
+              updateConfig({
+                skin: {
+                  ...DEFAULT_SKIN,
+                  ...config.skin,
+                  grid: {
+                    ...DEFAULT_SKIN.grid,
+                    ...config.skin?.grid,
+                    gridScalePercent: v,
+                  },
+                },
+              } as any)
+              }
+            />
+          <p className="text-xs text-muted-foreground text-center">
+            {(config.skin ?? DEFAULT_SKIN).grid?.gridScalePercent ?? 100} %
+          </p>
+        </div>
       </div>
 
       {/* Background */}

@@ -1,7 +1,7 @@
 export type AssetCategory = "animations" | "sprites" | "symbols" | "backgrounds" | "effects" | "sounds";
 export type AssetSource = "lottie" | "opengameart" | "kenney" | "custom";
 export type AssetLicense = "FREE" | "CC0" | "Attribution";
-export type AssetFileType = "png" | "jpg" | "gif" | "svg" | "webp" | "lottie" | "mp3";
+export type AssetFileType = "png" | "jpg" | "gif" | "svg" | "webp" | "lottie" | "mp3" | "mp4" | "webm";
 
 export interface AssetItem {
   id: string;
@@ -33,13 +33,68 @@ export interface ParticleEffectConfig {
   density: number; // 1-100
 }
 
+/** Personnage décoratif (ex. Zeus) : PNG ou MP4 (breathe), position et taille réglables */
+export interface DecorativeOverlayConfig {
+  url: string | null;
+  type: "image" | "video";
+  positionX: number; // 0-100, % depuis la gauche
+  positionY: number; // 0-100, % depuis le haut
+  /** Taille en % (50-800), 100 = taille par défaut */
+  scale: number;
+  /** Rendre le fond noir transparent (chroma key) pour les vidéos MP4 */
+  chromaKeyBlack?: boolean;
+  /** Rendre le fond blanc transparent (ex. export Canva/Unscreen). */
+  chromaKeyWhite?: boolean;
+  /** Seuil du chroma key (1-150). Noir : luminance < seuil = transparent. Blanc : luminance > 255-seuil = transparent. Défaut 55 (bas = seul le vrai noir enlevé, personnage opaque). */
+  chromaKeyThreshold?: number;
+  /** Effet de lumière pour mieux incruster le personnage : ombre portée, lueur, ou les deux. */
+  lightEffect?: "none" | "shadow" | "glow" | "shadow_glow";
+  /** Vitesse de lecture de la vidéo (0.25 à 2). Défaut 1. */
+  videoPlaybackRate?: number;
+}
+
 export interface AssetsConfig {
   symbolAssets: Record<string, string | null>; // symbolId -> assetUrl
   winAnimations: WinAnimationConfig[];
   particleEffects: ParticleEffectConfig[];
   customAssets: AssetItem[];
   backgroundAsset: string | null;
+  /** Personnage décoratif à gauche (image ou vidéo breathe), position réglable */
+  decorativeOverlayLeft: DecorativeOverlayConfig;
+  /** Personnage décoratif à droite (image ou vidéo breathe), position réglable */
+  decorativeOverlayRight: DecorativeOverlayConfig;
+  /** MP4 joué une fois quand un multiplicateur / gain tombe sur la grille (ex. Zeus lance des éclairs) */
+  multiplierRevealVideo: string | null;
 }
+
+export const DEFAULT_DECORATIVE_OVERLAY_LEFT: DecorativeOverlayConfig = {
+  url: null,
+  type: "image",
+  positionX: 15,
+  positionY: 50,
+  scale: 100,
+  chromaKeyBlack: false,
+  chromaKeyWhite: false,
+  chromaKeyThreshold: 55,
+  lightEffect: "shadow_glow",
+  videoPlaybackRate: 1,
+};
+
+export const DEFAULT_DECORATIVE_OVERLAY_RIGHT: DecorativeOverlayConfig = {
+  url: null,
+  type: "image",
+  positionX: 85,
+  positionY: 50,
+  scale: 100,
+  chromaKeyBlack: false,
+  chromaKeyWhite: false,
+  chromaKeyThreshold: 55,
+  lightEffect: "shadow_glow",
+  videoPlaybackRate: 1,
+};
+
+/** @deprecated Utiliser decorativeOverlayLeft / decorativeOverlayRight */
+export const DEFAULT_DECORATIVE_OVERLAY = DEFAULT_DECORATIVE_OVERLAY_RIGHT;
 
 export const DEFAULT_WIN_ANIMATIONS: WinAnimationConfig[] = [
   { tier: "win", animationId: null, builtIn: "coins_fall", duration: 1.5, intensity: "low" },
@@ -63,4 +118,7 @@ export const DEFAULT_ASSETS_CONFIG: AssetsConfig = {
   particleEffects: DEFAULT_PARTICLE_EFFECTS,
   customAssets: [],
   backgroundAsset: null,
+  decorativeOverlayLeft: DEFAULT_DECORATIVE_OVERLAY_LEFT,
+  decorativeOverlayRight: DEFAULT_DECORATIVE_OVERLAY_RIGHT,
+  multiplierRevealVideo: null,
 };
