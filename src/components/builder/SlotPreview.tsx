@@ -22,6 +22,7 @@ import { CURATED_ASSETS } from "@/data/curated-assets";
 import type { AssetsConfig } from "@/types/asset-types";
 import { DEFAULT_ASSETS_CONFIG } from "@/types/asset-types";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useRgsClient } from "@/context/RgsContext";
 import { isOfficialTemplate } from "@/data/official-stake-templates";
 import type { RgsRoundEvent, RgsWinEvent } from "@/lib/rgs-client";
@@ -868,7 +869,10 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
       const res = await rgs.play(betAmount, gameId);
       setSpinning(false);
       setSpinningReels(new Array(config.numReels).fill(false));
-      if (!res?.events?.length) return;
+      if (!res?.events?.length) {
+        toast.warning("Serveur RGS injoignable — mode local utilisé pour ce spin.");
+        // Fallback : continuer en exécutant le bloc local ci-dessous
+      } else {
       let hadMultiplierWin = false;
       for (const e of res.events as RgsRoundEvent[]) {
         if (e.type === "reveal" && e.board) {
@@ -901,9 +905,10 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
         });
       }
       return;
+      }
     }
 
-    // ——— Mode local (mock) ———
+    // ——— Mode local (mock) ou fallback RGS ———
     if (!inFreeSpins && balance < bet) return;
     setSpinning(true);
     setTumbling(false);

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { GameConfigProvider, useGameConfig } from "@/context/GameConfigContext";
 import { MathConfigProvider } from "@/context/MathConfigContext";
 import { SlotPreview } from "@/components/builder/SlotPreview";
@@ -30,12 +30,15 @@ const AMATEUR_STEPS = [
 
 function AmateurBuilderInner() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentStep, setCurrentStep } = useGameConfig();
   const { isStepComplete } = useStepCompletion();
   const [mobileView, setMobileView] = useState<"form" | "preview">("form");
   const safeStep = Math.max(0, Math.min(currentStep, AMATEUR_STEPS.length - 1));
   const StepComponent = AMATEUR_STEPS[safeStep].component;
   const currentStepDone = isStepComplete(safeStep);
+  // RGS uniquement si rgs_url est dans l'URL (sinon preview en local sans serveur)
+  const previewMode = useMemo(() => (searchParams.get("rgs_url") ? "rgs" : "local"), [searchParams]);
 
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-background">
@@ -78,7 +81,7 @@ function AmateurBuilderInner() {
           "hidden lg:block",
           mobileView === "preview" && "!block"
         )}>
-          <SlotPreview mode="rgs" />
+          <SlotPreview mode={previewMode} />
         </div>
 
         {/* Form */}

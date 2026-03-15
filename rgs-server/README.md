@@ -14,13 +14,14 @@ Port par défaut : **3111** (modifiable via `PORT`).
 
 ## Utilisation avec le front
 
-1. Démarrer le serveur : `npm start` dans `rgs-server`.
-2. Démarrer le front : `npm run dev` à la racine (écoute sur le port **8080**).
-3. Ouvrir le builder Amateur avec les paramètres RGS dans l’URL :
-   ```
-   http://localhost:8080/amateur/?rgs_url=http://localhost:3111
-   ```
-4. Optionnel : `&sessionID=xxx` si tu veux réutiliser une session (sinon le serveur en crée une).
+- **Sans serveur** : la preview Amateur fonctionne en mode local (mock) si tu ouvres `http://localhost:8080/amateur/` sans `rgs_url`. Aucun serveur RGS à lancer.
+- **Avec serveur** (maths réelles du RGS) :
+  1. Démarrer le serveur : `npm start` dans `rgs-server`.
+  2. Démarrer le front : `npm run dev` à la racine (port **8080**).
+  3. Ouvrir : `http://localhost:8080/amateur/?rgs_url=http://localhost:3111`
+  4. Optionnel : `&sessionID=xxx` pour réutiliser une session.
+
+Si `rgs_url` est présent mais le serveur est injoignable, la preview bascule automatiquement en mode local pour le spin et affiche un avertissement.
 
 ## Endpoints
 
