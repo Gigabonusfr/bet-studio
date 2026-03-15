@@ -138,7 +138,7 @@ En amont, le validateur BetStudio (section 5) et le mode « Préparation soumiss
 
 - [ ] Fichiers déposés dans `games/<game_id>/` (game_config.py, gamestate.py, run.py, stake_engine.py, reels/).
 - [ ] Reelstrips base (BR0.csv) et si besoin free (FR0.csv) en place.
-- [ ] Simulations lancées (nombre suffisant par mode).
+- [ ] **Simulations lancées : au moins 100 000 spins par mode** (recommandation Stake pour le calcul RTP / production). Ex. `num_sim_args = { "base": 100000, "freegame": 100000 }`.
 - [ ] RTP vérifié à la cible (ex. 96 %).
 - [ ] Optimisation exécutée (`run_optimization: True`).
 - [ ] Fichiers de sortie dans `library/publish_files/`.

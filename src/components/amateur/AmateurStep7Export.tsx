@@ -324,6 +324,25 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
       });
       exportAssets.symbolIdToUrl = exportSymbolIdToUrl;
 
+      // Personnages décoratifs gauche et droite (image ou MP4) — exportés en assets/character_left.* et assets/character_right.*
+      const ac = (config as { assetsConfig?: { decorativeOverlayLeft?: { url?: string | null; type?: "image" | "video" }; decorativeOverlayRight?: { url?: string | null; type?: "image" | "video" } } }).assetsConfig;
+      const decorativeLeftUrl = ac?.decorativeOverlayLeft?.url;
+      const decorativeRightUrl = ac?.decorativeOverlayRight?.url;
+      const exportDecorativePaths: { left: string | null; right: string | null } = { left: null, right: null };
+      for (const [side, url] of [
+        ["left", decorativeLeftUrl] as const,
+        ["right", decorativeRightUrl] as const,
+      ]) {
+        if (!url || typeof url !== "string") continue;
+        const path = toFetchableUrl(url);
+        const type = side === "left" ? ac?.decorativeOverlayLeft?.type : ac?.decorativeOverlayRight?.type;
+        const isVideo = type === "video" || /\.mp4(\?|$)/i.test(path) || /^data:video\/mp4/i.test(path);
+        const ext = isVideo ? "mp4" : (path.match(/\.(jpe?g|png|gif|webp)(?:\?|$)/i)?.[1]?.toLowerCase() === "jpeg" ? "jpg" : path.match(/\.(jpe?g|png|gif|webp)(?:\?|$)/i)?.[1]?.toLowerCase() || "png");
+        const filename = `character_${side}.${ext}`;
+        assetUrls.push({ url: path, filename, isVideo: isVideo || undefined });
+        exportDecorativePaths[side] = `assets/${filename}`;
+      }
+
       function extFromContentType(ct: string | null): string {
         if (!ct) return "";
         const c = ct.toLowerCase().split(";")[0].trim();
@@ -424,9 +443,10 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
               continue;
             }
             if (isVideoAsset) {
-              // Vidéo (ex. background MP4 en data URL) : écrire telle quelle
-              assetsFolder?.file("background.mp4", buf);
-              savedFilenames.set(filename, "background.mp4");
+              // Vidéo (background ou character left/right MP4 en data URL) : écrire avec le bon nom
+              const videoOut = filename.startsWith("background.") ? "background.mp4" : filename;
+              assetsFolder?.file(videoOut, buf);
+              savedFilenames.set(filename, videoOut);
               if (filename.startsWith("background.")) exportAssets.backgroundUrl = "assets/background.mp4";
               continue;
             }
@@ -536,6 +556,10 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
       if (bgKey && savedFilenames.get(bgKey)) {
         exportAssets.backgroundUrl = "assets/" + savedFilenames.get(bgKey)!;
       }
+      const leftSaved = Array.from(savedFilenames.entries()).find(([k]) => k.startsWith("character_left."));
+      const rightSaved = Array.from(savedFilenames.entries()).find(([k]) => k.startsWith("character_right."));
+      if (leftSaved) exportDecorativePaths.left = "assets/" + leftSaved[1];
+      if (rightSaved) exportDecorativePaths.right = "assets/" + rightSaved[1];
 
       // ——— Front React (player) publiable Stake Engine ———
       // 1) Embed config (consommée par le player: ./embed-config.json)
@@ -583,6 +607,14 @@ Pour que l'ACP trouve books_base.jsonl.zst, le mode de base doit s'appeler "base
           assetsConfig: {
             ...(config as any).assetsConfig,
             backgroundAsset: exportAssets.backgroundUrl || null,
+            decorativeOverlayLeft: {
+              ...(config as any).assetsConfig?.decorativeOverlayLeft,
+              url: exportDecorativePaths.left ?? (config as any).assetsConfig?.decorativeOverlayLeft?.url ?? null,
+            },
+            decorativeOverlayRight: {
+              ...(config as any).assetsConfig?.decorativeOverlayRight,
+              url: exportDecorativePaths.right ?? (config as any).assetsConfig?.decorativeOverlayRight?.url ?? null,
+            },
             symbolAssets: (() => {
               const out: Record<string, string | null> = {};
               SYMBOL_ID_TO_CONFIG_ID.forEach((id, num) => {

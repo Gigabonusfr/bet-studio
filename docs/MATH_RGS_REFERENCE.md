@@ -81,6 +81,7 @@ D’après **rgs_docs/data_format** :
 
 ## 4. RTP et attentes Stake Engine
 
+- **Nombre de simulations pour le RTP** : la doc Stake ([Quickstart](https://stakeengine.github.io/math-sdk/math_docs/quickstart/)) recommande **au moins 100 000 spins par mode** pour un jeu prêt pour la prod : *"For a production-ready game it is typically recommended to run 100k+ simulations per mode to ensure that there is a diverse range of payout multipliers to optimize over, and to significantly reduce the chances of any single player receiving the same round result more than once."* Dans BetStudio, les valeurs par défaut de `num_sim_args` (base / bonus) sont donc **100 000**.
 - **Stake Engine** : chaque sample game a un mode **base** (cost 1x) et un mode **freegame** (bonus). Les livres (events) et la lookup table sont **séparés par mode**. Le RTP cible est défini et vérifié par le Math SDK (simulations, optimisation des bandes).
 - **Ce que Stake attend à l’import** : `index.json` avec au moins un mode base et souvent un mode bonus, chaque mode avec son `events` (`.jsonl.zst`) et son `weights` (CSV). Les payout multipliers du CSV doivent correspondre aux books.
 - **Preview (rgs-server)** : une seule évaluation par spin (pas de tumble). Le script de simulation permet d’estimer le RTP base et bonus (preview) :

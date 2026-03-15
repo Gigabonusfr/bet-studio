@@ -74,13 +74,17 @@ export function generateGameConfigPy(config: GameConfig, mathConfig: MathConfig)
   if (wildSymbols.length > 0) specialSymbolsLines.push(`            "wild": [${wildSymbols.join(", ")}],`);
   if (scatterSymbols.length > 0) specialSymbolsLines.push(`            "scatter": [${scatterSymbols.join(", ")}],`);
 
-  // Build freespin_triggers
+  // Build freespin_triggers + anticipation_triggers (requis par le SDK board.py)
   const freespinTriggersBlock = config.freeSpins.enabled
     ? `
         # Freespin Triggers - scatter_count: free_spins_awarded
         self.freespin_triggers = {
             self.basegame_type: {${basegameTriggers}},
 ${config.freeSpins.retrigger ? `            self.freegame_type: {${freegameTriggers}},` : ""}
+        }
+        self.anticipation_triggers = {
+            self.basegame_type: min(self.freespin_triggers[self.basegame_type].keys()) - 1,
+            self.freegame_type: ${config.freeSpins.retrigger ? "min(self.freespin_triggers[self.freegame_type].keys()) - 1" : "0"},
         }`
     : "";
 
@@ -94,7 +98,7 @@ ${config.freeSpins.retrigger ? `            self.freegame_type: {${freegameTrigg
         }`
     : "";
 
-  // Build BetModes
+  // Build BetModes — reel_weights doit inclure freegame pour les distros base quand free spins (SDK attend reel_weights[gametype] en freegame)
   const baseDistributions = config.freeSpins.enabled
     ? `
                     Distribution(
@@ -103,6 +107,7 @@ ${config.freeSpins.retrigger ? `            self.freegame_type: {${freegameTrigg
                         conditions={
                             "reel_weights": {
                                 self.basegame_type: {${basegameWeights}},
+                                self.freegame_type: {${freegameWeights}},
                             },
                             "force_wincap": False,
                             "force_freegame": False,
@@ -114,6 +119,7 @@ ${config.freeSpins.retrigger ? `            self.freegame_type: {${freegameTrigg
                         conditions={
                             "reel_weights": {
                                 self.basegame_type: {${basegameWeights}},
+                                self.freegame_type: {${freegameWeights}},
                             },
                             "force_wincap": False,
                             "force_freegame": False,
@@ -126,6 +132,7 @@ ${config.freeSpins.retrigger ? `            self.freegame_type: {${freegameTrigg
                         conditions={
                             "reel_weights": {
                                 self.basegame_type: {${basegameWeights}},
+                                self.freegame_type: {${freegameWeights}},
                             },
                             "force_wincap": True,
                             "force_freegame": False,
@@ -191,7 +198,8 @@ ${config.freeSpins.retrigger ? `            self.freegame_type: {${freegameTrigg
             ),`
     : "";
 
-  return `from stake_engine import GameConfig as BaseGameConfig, BetMode, Distribution
+  return `import os
+from stake_engine import GameConfig as BaseGameConfig, BetMode, Distribution
 
 
 class GameConfig(BaseGameConfig):
@@ -204,7 +212,12 @@ class GameConfig(BaseGameConfig):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.game_id = "${config.gameId || "untitled"}"
-        self.construct_paths()
+        self.construct_paths(self.game_id)
+        # Export dans games/<id>/math/ : reels et library sont à côté de ce fichier
+        _base = os.path.dirname(os.path.abspath(__file__))
+        self.reels_path = os.path.join(_base, "reels")
+        self.library_path = os.path.join(_base, "library")
+        self.publish_path = os.path.join(_base, "library", "publish_files")
 
         # Grid Configuration (num_rows = list, one per reel, for SDK compatibility)
         self.num_reels = ${config.numReels}
@@ -276,6 +289,11 @@ class GameState(BaseGameState):
         super().__init__(*args, **kwargs)
         self.event_index = 0
         self.total_win = 0.0
+
+    def add_event(self, event: dict):
+        """Délègue au book du SDK (requis quand run_spin appelle add_event)."""
+        if hasattr(self, "book") and self.book is not None:
+            self.book.add_event(event)
 
     def assign_special_sym_function(self):
         """Requis par le Math SDK — pas de symboles spéciaux custom."""
@@ -481,33 +499,77 @@ class GameState(BaseGameState):
   const tumbleMethod = hasTumble
     ? `
     def tumble_board(self, board, win_positions):
-        """Remove winning symbols and drop new ones from reelstrip."""
+        """Remove winning symbols and drop new ones from reelstrip. Dedup positions to avoid IndexError on pop."""
         import random
-        
+        seen = set()
+        by_col = {}
+        for c, r in win_positions:
+            if (c, r) in seen:
+                continue
+            seen.add((c, r))
+            if c not in by_col:
+                by_col[c] = []
+            by_col[c].append(r)
         for col in range(self.config.num_reels):
-            remove_rows = sorted([r for c, r in win_positions if c == col], reverse=True)
+            if col not in by_col:
+                continue
+            remove_rows = sorted(set(by_col[col]), reverse=True)
             for row in remove_rows:
-                board[col].pop(row)
-            
-            # Fill from top with random symbols from reelstrip
+                if 0 <= row < len(board[col]):
+                    board[col].pop(row)
             reel_key = list(self.config.reels.keys())[0]
             reel = self.config.reels[reel_key][col]
             while len(board[col]) < self.config.num_rows[col]:
                 board[col].insert(0, random.choice(reel))
-        
         return board`
     : "";
 
+  // Flux SDK : run_spin(sim) appelle _run_spin_sdk(sim) (reset_seed, while repeat: reset_book, draw_board, _board_to_names, _emit_events_and_tumble, update_final_win, check_repeat, imprint_wins)
   const runSpin = `
-    def run_spin(self, game_type="basegame"):
-        """Execute a single spin cycle."""
-        self.event_index = 0
-        self.total_win = 0.0
-        
-        # Draw board from reelstrips
-        board = self.draw_board(game_type)
-        
-        # Emit reveal event
+    _MAX_REPEAT_ATTEMPTS = 5000
+
+    def _board_to_names(self):
+        """Convert SDK self.board (Symbol objects) to list of symbol names for evaluate_wins."""
+        if not getattr(self, "board", None):
+            return None
+        return [[getattr(s, "name", str(s)) for s in col] for col in self.board]
+
+    def run_spin(self, sim_or_game_type=None):
+        """SDK appelle run_spin(sim: int). Legacy run_spin(game_type=\"basegame\")."""
+        if isinstance(sim_or_game_type, int):
+            self._run_spin_sdk(sim_or_game_type)
+            return
+        game_type = sim_or_game_type if sim_or_game_type is not None else "basegame"
+        self._run_spin_legacy(game_type)
+
+    def _run_spin_sdk(self, sim: int):
+        """Flux identique au sample scatter : reset_seed, while repeat: reset_book, draw_board(), events, win_manager, update_final_win, check_repeat, imprint_wins."""
+        self.reset_seed(sim)
+        self.repeat = True
+        attempts = 0
+        while self.repeat:
+            attempts += 1
+            if attempts > self._MAX_REPEAT_ATTEMPTS:
+                self.repeat = False
+                break
+            self.reset_book()
+            self.gametype = self.config.basegame_type
+            self.event_index = 0
+            self.total_win = 0.0
+            self.draw_board()
+            board = self._board_to_names()
+            if board is None:
+                self.repeat = True
+                continue
+            self._emit_events_and_tumble(board, self.gametype)
+            self.win_manager.set_spin_win(self.total_win)
+            self.win_manager.update_gametype_wins(self.gametype)
+            self.update_final_win()
+            self.check_repeat()
+        self.imprint_wins()
+
+    def _emit_events_and_tumble(self, board, game_type):
+        """Emet reveal, boucle tumble (evaluate_wins, winInfo, setWin, setTotalWin), finalWin. Met à jour self.total_win."""
         self.add_event({
             "index": self.event_index,
             "type": "reveal",
@@ -517,39 +579,15 @@ class GameState(BaseGameState):
             "anticipation": [],
         })
         self.event_index += 1
-        
-        # Check for scatter triggers (free spins)
-        scatter_syms = self.config.special_symbols.get("scatter", [])
-        scatter_count = sum(
-            1 for col in board for sym in col if sym in scatter_syms
-        )
-        
-        if game_type in self.config.freespin_triggers:
-            triggers = self.config.freespin_triggers[game_type]
-            if scatter_count in triggers:
-                fs_count = triggers[scatter_count]
-                self.add_event({
-                    "index": self.event_index,
-                    "type": "freeSpinAwarded",
-                    "count": fs_count,
-                    "totalCount": fs_count,
-                })
-                self.event_index += 1
-        
-        ${hasTumble ? `# Tumble loop
         tumble_round = 0
         while True:
             wins = self.evaluate_wins(board)
             if not wins:
                 break
-            
             win_amount = sum(w["win"] for w in wins)
             self.total_win += win_amount
-            
-            # Cap at wincap
             if self.total_win >= self.config.wincap:
                 self.total_win = self.config.wincap
-            
             self.add_event({
                 "index": self.event_index,
                 "type": "winInfo",
@@ -557,7 +595,6 @@ class GameState(BaseGameState):
                 "wins": wins,
             })
             self.event_index += 1
-            
             self.add_event({
                 "index": self.event_index,
                 "type": "setWin",
@@ -565,23 +602,18 @@ class GameState(BaseGameState):
                 "winLevel": min(tumble_round + 1, 5),
             })
             self.event_index += 1
-            
             self.add_event({
                 "index": self.event_index,
                 "type": "setTotalWin",
                 "amount": self.total_win,
             })
             self.event_index += 1
-            
             if self.total_win >= self.config.wincap:
                 break
-            
-            # Remove winning positions and tumble
             win_positions = []
             for w in wins:
                 win_positions.extend([(p[0], p[1]) for p in w["positions"]])
             board = self.tumble_board(board, win_positions)
-            
             self.add_event({
                 "index": self.event_index,
                 "type": "reveal",
@@ -591,49 +623,30 @@ class GameState(BaseGameState):
                 "anticipation": [],
             })
             self.event_index += 1
-            tumble_round += 1` : `# Evaluate wins
-        wins = self.evaluate_wins(board)
-        if wins:
-            win_amount = sum(w["win"] for w in wins)
-            self.total_win = min(win_amount, self.config.wincap)
-            
-            self.add_event({
-                "index": self.event_index,
-                "type": "winInfo",
-                "totalWin": self.total_win,
-                "wins": wins,
-            })
-            self.event_index += 1
-            
-            self.add_event({
-                "index": self.event_index,
-                "type": "setWin",
-                "amount": self.total_win,
-                "winLevel": 1,
-            })
-            self.event_index += 1
-            
-            self.add_event({
-                "index": self.event_index,
-                "type": "setTotalWin",
-                "amount": self.total_win,
-            })
-            self.event_index += 1`}
-        
-        # Final win event
+            tumble_round += 1
         self.add_event({
             "index": self.event_index,
             "type": "finalWin",
             "amount": self.total_win,
         })
-        
+
+    def _run_spin_legacy(self, game_type="basegame"):
+        """Legacy: draw_board() puis _emit_events_and_tumble (si besoin appel depuis run_freespin)."""
+        self.event_index = 0
+        self.total_win = 0.0
+        self.gametype = game_type
+        self.draw_board()
+        board = self._board_to_names()
+        if board is None:
+            return 0.0
+        self._emit_events_and_tumble(board, game_type)
         self.check_repeat()
         return self.total_win`;
 
   const freespinMethod = hasFreespins
     ? `
     def run_freespin(self):
-        """Execute free spin rounds."""
+        """Execute free spin rounds (legacy: run_spin freegame)."""
         return self.run_spin(game_type="freegame")`
     : "";
 
