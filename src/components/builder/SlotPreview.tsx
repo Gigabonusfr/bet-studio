@@ -605,7 +605,8 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
           });
         });
       } else if (config.winMechanic === "scatter") {
-        // Scatter count-based wins
+        // Scatter Pays : minimum 8 symboles (pay-anywhere), scale ~0.15 pour RTP preview ~97% (aligné rgs-server)
+        const SCATTER_PREVIEW_SCALE = 0.148;
         const allSymbols = config.symbols.filter((s) => s.type === "high" || s.type === "low");
         allSymbols.forEach((symDef) => {
           const positions: [number, number][] = [];
@@ -616,16 +617,21 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
               }
             });
           });
-          if (positions.length >= 3 && symDef.paytable[positions.length]) {
-            foundWins.push({
-              positions,
-              symbol: symDef.name,
-              multiplier: symDef.paytable[positions.length],
-            });
-            totalMultiplier += symDef.paytable[positions.length];
+          if (positions.length >= 8) {
+            const key = positions.length >= 14 ? 14 : positions.length;
+            const mult = symDef.paytable[key] ?? symDef.paytable[positions.length];
+            if (mult > 0) {
+              const scaled = mult * SCATTER_PREVIEW_SCALE;
+              foundWins.push({
+                positions,
+                symbol: symDef.name,
+                multiplier: scaled,
+              });
+              totalMultiplier += scaled;
+            }
           }
         });
-        // Symbole BONUS = multiplicateur (Gates of Olympus) : appliqué en cascade via runTumbleCascade si applyBonusMultiplier, sinon géré par le multiplicateur de cascade persistant
+        // BONUS = multiplicateur (cap 50 comme rgs-server pour RTP preview raisonnable)
         if (applyBonusMultiplier) {
           const bonusSym = config.symbols.find((s) => s.type === "bonus");
           if (bonusSym) {
@@ -638,7 +644,9 @@ export function SlotPreview({ mode = "local", locked = false }: SlotPreviewProps
                 }
               });
             });
-            if (bonusSum > 0) totalMultiplier *= 1 + bonusSum;
+            if (bonusSum > 0 && totalMultiplier > 0) {
+              totalMultiplier *= Math.min(1 + bonusSum, 50);
+            }
           }
         }
       }
